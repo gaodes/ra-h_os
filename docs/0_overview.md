@@ -23,6 +23,6 @@ For more information, visit [ra-h.app](https://ra-h.app)
 
 ## Current Status
 
-- **Version:** Beta (private distribution)
-- **Platform:** Web-based (Next.js server)
-- **Roadmap:** Native Mac application with user data migration
+- **Version:** 0.1.0 (Open Source)
+- **Platform:** Web-based (Next.js server, local-only)
+- **License:** MIT

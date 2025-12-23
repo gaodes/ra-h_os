@@ -76,7 +76,7 @@ RA-H uses a fixed 3-panel desktop layout optimized for knowledge work.
 3. **Workflows** - Available workflows (integrate)
 4. **Logs** - Activity feed (last 100 entries)
 5. **Analytics** - Token usage and cost breakdown
-6. **API Keys** - Configure Anthropic/OpenAI/Tavily keys (beta ships with embedded keys)
+6. **API Keys** - Configure your Anthropic/OpenAI/Tavily keys (required for operation)
 
 **Logs view:**
 - Table/action filtering
