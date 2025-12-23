@@ -10,6 +10,7 @@ import { Node } from '@/types/database';
 import { DatabaseEvent } from '@/services/events';
 import { usePersistentState } from '@/hooks/usePersistentState';
 import FolderViewOverlay from '../nodes/FolderViewOverlay';
+import { Maximize2 } from 'lucide-react';
 
 export default function ThreePanelLayout() {
   // Panel widths as percentages (20% | 40% | 40%)
@@ -18,6 +19,9 @@ export default function ThreePanelLayout() {
   
   // Collapsible state for nodes panel
   const [nodesCollapsed, setNodesCollapsed] = usePersistentState('ui.nodesCollapsed', false);
+
+  // Collapsible state for chat/agents panel
+  const [chatCollapsed, setChatCollapsed] = usePersistentState('ui.chatCollapsed', false);
   
   // Settings dropdown state
   const [showSettings, setShowSettings] = useState(false);
@@ -89,26 +93,21 @@ export default function ThreePanelLayout() {
   // Keyboard shortcut handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Cmd+1 (Mac) or Ctrl+1 (Windows/Linux)
+      // Check for Cmd+1 (Mac) or Ctrl+1 (Windows/Linux) - toggle nodes panel
       if ((e.metaKey || e.ctrlKey) && e.key === '1') {
         e.preventDefault();
         setNodesCollapsed(prev => !prev);
       }
+      // Check for Cmd+\ (Mac) or Ctrl+\ (Windows/Linux) - toggle chat panel
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault();
+        setChatCollapsed(prev => !prev);
+      }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setNodesCollapsed]);
-
-  useEffect(() => {
-    const handleSettingsOpen = (event: Event) => {
-      const detail = (event as CustomEvent<{ tab?: SettingsTab }>).detail;
-      setSettingsInitialTab(detail?.tab);
-      setShowSettings(true);
-    };
-    window.addEventListener('settings:open', handleSettingsOpen as EventListener);
-    return () => window.removeEventListener('settings:open', handleSettingsOpen as EventListener);
-  }, []);
+  }, [setNodesCollapsed, setChatCollapsed]);
 
 
   // SSE connection for real-time updates
@@ -373,9 +372,16 @@ export default function ThreePanelLayout() {
     handleCloseTab(nodeId);
   };
 
-  const rightWidth = nodesCollapsed ? (100 - middleWidth) : (100 - leftWidth - middleWidth);
+  // Calculate panel widths based on collapse states
+  const baseRightWidth = nodesCollapsed ? (100 - middleWidth) : (100 - leftWidth - middleWidth);
   const effectiveLeftWidth = nodesCollapsed ? 0 : leftWidth;
-  const effectiveMiddleWidth = nodesCollapsed ? (leftWidth + middleWidth) : middleWidth;
+
+  // When chat is collapsed, middle panel takes its space (but leave room for 64px rail)
+  const effectiveRightWidth = chatCollapsed ? 0 : baseRightWidth;
+  // Note: When chatCollapsed, we use calc() to leave room for the 64px collapsed rail
+  const effectiveMiddleWidth = chatCollapsed
+    ? (nodesCollapsed ? 100 : (middleWidth + baseRightWidth))
+    : (nodesCollapsed ? (leftWidth + middleWidth) : middleWidth);
 
   const activeNodeId = activeTab;
 
@@ -476,11 +482,15 @@ export default function ThreePanelLayout() {
       )}
 
       {/* Middle Panel - Focus */}
-      <div 
-        style={{ 
-          width: `${effectiveMiddleWidth}%`,
+      <div
+        style={{
+          width: chatCollapsed
+            ? (nodesCollapsed
+                ? `calc(100% - 48px - 40px)`
+                : `calc(${effectiveMiddleWidth}% - 48px)`)
+            : `${effectiveMiddleWidth}%`,
           flexShrink: 0,
-          borderRight: '1px solid #1a1a1a',
+          borderRight: chatCollapsed ? 'none' : '1px solid #1a1a1a',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
@@ -489,8 +499,8 @@ export default function ThreePanelLayout() {
         }}
       >
         <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-          <div style={{ 
-            height: '100%', 
+          <div style={{
+            height: '100%',
             visibility: folderViewOpen ? 'hidden' : 'visible',
             pointerEvents: folderViewOpen ? 'none' : 'auto'
           }}>
@@ -516,7 +526,7 @@ export default function ThreePanelLayout() {
       </div>
 
       {/* Right Resize Handle */}
-      {!nodesCollapsed && (
+      {!nodesCollapsed && !chatCollapsed && (
         <div
           onMouseDown={() => setIsDraggingRight(true)}
           style={{
@@ -530,25 +540,68 @@ export default function ThreePanelLayout() {
         />
       )}
 
-      {/* Right Panel - Agents */}
-      <div 
-        style={{ 
-          width: `${rightWidth}%`,
+      {/* Right Panel - Agents (collapsible) */}
+      {chatCollapsed ? (
+        // Collapsed rail
+        <div style={{
+          width: '48px',
           flexShrink: 0,
-          overflow: 'hidden',
+          borderLeft: '1px solid #2a2a2a',
+          background: '#0f0f0f',
           display: 'flex',
           flexDirection: 'column',
-          background: '#0a0a0a',
-          position: 'relative',
-          padding: '4px'
-        }}
-      >
-        <AgentsPanel 
-          openTabsData={openTabsData}
-          activeTabId={activeNodeId}
-          onNodeClick={(nodeId) => handleNodeSelect(nodeId, false)}
-        />
-      </div>
+          alignItems: 'center',
+          paddingTop: '12px'
+        }}>
+          <button
+            onClick={() => setChatCollapsed(false)}
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              border: '1px solid #1f1f1f',
+              background: 'transparent',
+              color: '#666',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#1a1a1a';
+              e.currentTarget.style.color = '#999';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#666';
+            }}
+            title="Expand Chat (⌘\)"
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
+      ) : (
+        <div
+          style={{
+            width: `${effectiveRightWidth}%`,
+            flexShrink: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#0a0a0a',
+            position: 'relative',
+            padding: '4px'
+          }}
+        >
+          <AgentsPanel
+            openTabsData={openTabsData}
+            activeTabId={activeNodeId}
+            onNodeClick={(nodeId) => handleNodeSelect(nodeId, false)}
+            onCollapse={() => setChatCollapsed(true)}
+          />
+        </div>
+      )}
       
       {/* Settings Modal */}
       <SettingsModal

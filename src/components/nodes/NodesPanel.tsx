@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type DragEvent } from 'react';
+import { useState, useEffect, useRef, type DragEvent } from 'react';
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Layers, List, Maximize2, Minimize2 } from 'lucide-react';
 import { Node } from '@/types/database';
 import AddNodeButton from './AddNodeButton';
@@ -45,6 +45,7 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [dropFeedback, setDropFeedback] = useState<string | null>(null);
   const [dragHoverDimension, setDragHoverDimension] = useState<string | null>(null);
+  const draggedNodeRef = useRef<{ id: number; dimensions?: string[] } | null>(null);
 
   useEffect(() => {
     fetchNodes();
@@ -153,14 +154,14 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
   };
 
   const handleDimensionDragOver = (event: DragEvent<HTMLElement>) => {
-    if (event.dataTransfer.types.includes('application/node-info')) {
+    if (event.dataTransfer.types.includes('application/node-info') || event.dataTransfer.types.includes('text/plain')) {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'copy';
     }
   };
 
   const handleDimensionDragEnter = (event: DragEvent<HTMLElement>, dimension: string) => {
-    if (event.dataTransfer.types.includes('application/node-info')) {
+    if (event.dataTransfer.types.includes('application/node-info') || event.dataTransfer.types.includes('text/plain')) {
       setDragHoverDimension(dimension);
     }
   };
@@ -172,17 +173,33 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
   };
 
   const handleNodeDropOnDimension = async (event: DragEvent<HTMLElement>, dimension: string) => {
-    if (!event.dataTransfer.types.includes('application/node-info')) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Try to get data from ref first (works in Electron/Tauri webviews)
+    let payload: { id: number; dimensions?: string[] } | null = draggedNodeRef.current;
+    
+    // Fallback to dataTransfer for browser compatibility
+    if (!payload) {
+      const raw = event.dataTransfer.getData('application/node-info') || event.dataTransfer.getData('text/plain');
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch (e) {
+          console.error('Failed to parse drag data:', e);
+        }
+      }
+    }
+    
+    // Clear the ref
+    draggedNodeRef.current = null;
+    
+    if (!payload?.id) {
+      console.warn('No valid node data in drop event');
       return;
     }
-    event.preventDefault();
-    const raw = event.dataTransfer.getData('application/node-info');
-    if (!raw) return;
 
     try {
-      const payload = JSON.parse(raw) as { id: number; dimensions?: string[] };
-      if (!payload?.id) return;
-
       const currentDimensions = payload.dimensions || [];
       if (currentDimensions.some((dim) => dim.toLowerCase() === dimension.toLowerCase())) {
         setDropFeedback(`Node already in ${dimension}`);
@@ -368,10 +385,15 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
 
   const handleNodeDragStart = (event: DragEvent<HTMLElement>, node: Node) => {
     event.dataTransfer.effectAllowed = 'copy';
-    event.dataTransfer.setData('application/node-info', JSON.stringify({
+    const nodeData = {
       id: node.id,
       dimensions: node.dimensions || []
-    }));
+    };
+    // Store in ref for webview compatibility (dataTransfer.getData can fail in Electron/Tauri)
+    draggedNodeRef.current = nodeData;
+    // Also set in dataTransfer for browser compatibility
+    event.dataTransfer.setData('application/node-info', JSON.stringify(nodeData));
+    event.dataTransfer.setData('text/plain', JSON.stringify(nodeData));
 
     const preview = document.createElement('div');
     preview.textContent = node.title || `Node #${node.id}`;
@@ -394,11 +416,17 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
     }, 0);
   };
 
+  const handleNodeDragEnd = () => {
+    // Clear ref if drag ends without a drop
+    draggedNodeRef.current = null;
+  };
+
   const renderNodeItem = (node: Node) => (
     <button
       key={node.id}
       draggable
       onDragStart={(event) => handleNodeDragStart(event, node)}
+      onDragEnd={handleNodeDragEnd}
       onClick={(e) => {
         const multiSelect = e.metaKey || e.ctrlKey;
         onNodeSelect(node.id, multiSelect);
@@ -580,27 +608,29 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
               <button
                 onClick={() => onToggleFolderView?.()}
                 style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '10px',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '6px',
                   border: '1px solid #1f1f1f',
-                  background: folderViewOpen ? '#16301f' : '#080808',
-                  color: folderViewOpen ? '#22c55e' : '#cbd5f5',
+                  background: 'transparent',
+                  color: '#666',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  transition: 'background 0.2s ease, color 0.2s ease'
+                  transition: 'all 0.15s ease'
                 }}
                 title={folderViewOpen ? 'Close dimension folder view' : 'Open dimension folder view'}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = folderViewOpen ? '#1c3b27' : '#101010';
+                  e.currentTarget.style.background = '#1a1a1a';
+                  e.currentTarget.style.color = '#999';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = folderViewOpen ? '#16301f' : '#080808';
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#666';
                 }}
               >
-                {folderViewOpen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                {folderViewOpen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
               </button>
             </div>
 

@@ -8,7 +8,6 @@ import { calculateCost } from '@/services/analytics/pricing';
 import { UsageData } from '@/types/analytics';
 import { summarizeToolExecution } from '@/services/agents/toolResultUtils';
 import { edgeService } from '@/services/database/edges';
-import { RequestContext } from '@/services/context/requestContext';
 
 interface CapsuleNodeJSON {
   id: number;
@@ -121,11 +120,7 @@ export interface MiniRAHExecutionInput {
 export class MiniRAHExecutor {
   static async execute({ sessionId, task, context, expectedOutcome, traceId, parentChatId, workflowKey, workflowNodeId }: MiniRAHExecutionInput) {
     try {
-      const requestContext = RequestContext.get();
-      const delegateKey =
-        requestContext.apiKeys?.openai ||
-        process.env.RAH_DELEGATE_OPENAI_API_KEY ||
-        process.env.OPENAI_API_KEY;
+      const delegateKey = process.env.RAH_DELEGATE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
       if (!delegateKey) {
         throw new Error('RAH_DELEGATE_OPENAI_API_KEY (or OPENAI_API_KEY) is not set.');
       }

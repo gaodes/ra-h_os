@@ -210,7 +210,6 @@ async function handleNoteQuickAdd(rawInput: string, task: string): Promise<strin
     body: JSON.stringify({
       title,
       content,
-      dimensions: [],
       metadata: {
         source: 'quick-add-note',
         refined_at: new Date().toISOString(),
@@ -307,7 +306,6 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
       title,
       content,
       chunk: transcript,
-      dimensions: [],
       metadata,
     }),
   });

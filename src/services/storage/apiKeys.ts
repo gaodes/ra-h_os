@@ -32,12 +32,6 @@ export class ApiKeyService {
     this.loadKeys();
   }
 
-  private notifyUpdate(): void {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('api-keys:updated'));
-    }
-  }
-
   // Load keys from localStorage
   private loadKeys(): void {
     try {
@@ -81,7 +75,6 @@ export class ApiKeyService {
     if (this.validateOpenAiKey(key)) {
       this.keys.openai = key;
       this.saveKeys();
-      this.notifyUpdate();
     } else {
       throw new Error('Invalid OpenAI API key format');
     }
@@ -92,7 +85,6 @@ export class ApiKeyService {
     if (this.validateAnthropicKey(key)) {
       this.keys.anthropic = key;
       this.saveKeys();
-      this.notifyUpdate();
     } else {
       throw new Error('Invalid Anthropic API key format');
     }
@@ -103,14 +95,12 @@ export class ApiKeyService {
     delete this.keys.openai;
     this.saveKeys();
     this.status.openai = 'not-set';
-    this.notifyUpdate();
   }
 
   clearAnthropicKey(): void {
     delete this.keys.anthropic;
     this.saveKeys();
     this.status.anthropic = 'not-set';
-    this.notifyUpdate();
   }
 
   // Clear all keys
@@ -121,7 +111,6 @@ export class ApiKeyService {
       openai: 'not-set',
       anthropic: 'not-set'
     };
-    this.notifyUpdate();
   }
 
   // Get masked key for display (show only last 4 characters)
@@ -184,16 +173,26 @@ export class ApiKeyService {
   async testAnthropicConnection(key?: string): Promise<boolean> {
     const testKey = key || this.getAnthropicKey();
     if (!testKey) return false;
+
     this.status.anthropic = 'testing';
 
     try {
-      const response = await fetch('/api/local/test-anthropic', {
+      // Simple test call to Anthropic API
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: testKey }),
+        headers: {
+          'x-api-key': testKey,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'test' }]
+        })
       });
-      const data = await response.json();
-      const isConnected = Boolean(data?.ok);
+
+      const isConnected = response.ok;
       this.status.anthropic = isConnected ? 'connected' : 'failed';
       return isConnected;
     } catch (error) {

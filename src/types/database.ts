@@ -171,3 +171,11 @@ export interface DatabaseError {
   code?: string;
   details?: any;
 }
+
+// Dimension interface for dimension management
+export interface Dimension {
+  name: string;
+  description?: string | null;
+  is_priority: boolean;
+  updated_at: string;
+}

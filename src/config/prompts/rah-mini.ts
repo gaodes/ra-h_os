@@ -22,4 +22,5 @@ Additional guidance:
 - If you cannot complete a step (missing node, empty content, tool failure), state that explicitly in 'Follow-up' with the precise next action needed.
 - Stop after success—do not run extra verification tools.
 - Keep the full summary under ~100 tokens.
+- You can create and manage dimensions using createDimension, updateDimension, lockDimension, unlockDimension, deleteDimension tools. Lock dimensions (isPriority=true) to enable auto-assignment.
 `;

@@ -19,6 +19,8 @@ export interface ContextBuilderOptions {
 const BASE_CONTEXT = `=== RA-H BASE CONTEXT ===
 - Nodes store content (title, content, dimensions, metadata, link, chunk)
 - Edges capture directed relationships between nodes
+- Dimensions organize nodes; locked dimensions (isPriority=true) auto-assign to new nodes
+- You can create and manage dimensions using dimension tools (createDimension, updateDimension, lockDimension, unlockDimension, deleteDimension)
 - When auto-context is enabled you'll see BACKGROUND CONTEXT with the 10 most-connected nodes (ID + title only)
 - Focused nodes show truncated content; use queryNodes, searchContentEmbeddings, or queryEdge when you need full detail
 - Node references must use [NODE:id:"title"] so the UI renders clickable labels

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import RAHChat from './RAHChat';
 import QuickAddInput from './QuickAddInput';
 import QuickAddStatus from './QuickAddStatus';
-import { Zap, Flame } from 'lucide-react';
+import { Zap, Flame, Minimize2 } from 'lucide-react';
 import type { AgentDelegation } from '@/services/agents/delegation';
 import { Node } from '@/types/database';
 
@@ -12,12 +12,13 @@ interface AgentsPanelProps {
   openTabsData: Node[];
   activeTabId: number | null;
   onNodeClick?: (nodeId: number) => void;
+  onCollapse?: () => void;
 }
 
 type ActiveTab = 'ra-h' | string; // 'ra-h' or delegation sessionId
 type Mode = 'quickadd' | 'session';
 
-export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick }: AgentsPanelProps) {
+export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, onCollapse }: AgentsPanelProps) {
   const [delegationsMap, setDelegationsMap] = useState<Record<string, AgentDelegation>>({});
   const [activeAgentTab, setActiveAgentTab] = useState<ActiveTab>('ra-h');
   const [mode, setMode] = useState<Mode>('quickadd');
@@ -186,7 +187,7 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick }: 
   };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0a0a0a' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0a0a0a', position: 'relative' }}>
       {/* Mode Header */}
       {mode === 'quickadd' ? (
         <div style={{
@@ -198,8 +199,42 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick }: 
           gap: '24px',
           justifyContent: 'space-between',
           alignItems: 'center',
-          height: '100%'
+          height: '100%',
+          position: 'relative'
         }}>
+          {/* Collapse button - top right */}
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              style={{
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                border: '1px solid #1f1f1f',
+                background: 'transparent',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              title="Collapse chat panel (⌘\)"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#1a1a1a';
+                e.currentTarget.style.color = '#999';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#666';
+              }}
+            >
+              <Minimize2 size={14} />
+            </button>
+          )}
           {/* Top spacer */}
           <div style={{ flex: 1 }} />
 
@@ -307,7 +342,39 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick }: 
 
       {/* Tab Bar (only show in session mode) */}
       {mode === 'session' && (
-        <div className="agent-tabs" style={{ position: 'relative' }}>
+        <div className="agent-tabs" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        {/* Collapse button - first item */}
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              border: '1px solid #1f1f1f',
+              background: 'transparent',
+              color: '#666',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              marginRight: '8px',
+              flexShrink: 0
+            }}
+            title="Collapse chat panel (⌘\)"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#1a1a1a';
+              e.currentTarget.style.color = '#999';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#666';
+            }}
+          >
+            <Minimize2 size={14} />
+          </button>
+        )}
         {/* Quick Add button - positioned at far right */}
         <div style={{
           position: 'absolute',

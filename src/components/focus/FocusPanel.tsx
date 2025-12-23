@@ -1040,7 +1040,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     <>
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#000' }}>
       {/* Tab Bar */}
-      <div style={{ 
+      <div style={{
         display: 'flex',
         borderBottom: '1px solid #333',
         background: '#0a0a0a',
