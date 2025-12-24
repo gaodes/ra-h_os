@@ -7,6 +7,8 @@ import AddNodeButton from './AddNodeButton';
 import Chip from '../common/Chip';
 import { getNodeIcon } from '@/utils/nodeIcons';
 import SearchModal from './SearchModal';
+import { DynamicIcon } from '../common/LucideIconPicker';
+import { usePersistentState } from '@/hooks/usePersistentState';
 
 interface NodesPanelProps {
   selectedNodes: Set<number>;
@@ -46,6 +48,9 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
   const [dropFeedback, setDropFeedback] = useState<string | null>(null);
   const [dragHoverDimension, setDragHoverDimension] = useState<string | null>(null);
   const draggedNodeRef = useRef<{ id: number; dimensions?: string[] } | null>(null);
+
+  // Dimension icons (shared with FolderViewOverlay via localStorage)
+  const [dimensionIcons] = usePersistentState<Record<string, string>>('ui.dimensionIcons', {});
 
   useEffect(() => {
     fetchNodes();
@@ -774,7 +779,13 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                      {isExpanded ? (
+                      {dimensionIcons[lockedDim.dimension] ? (
+                        <DynamicIcon
+                          name={dimensionIcons[lockedDim.dimension]}
+                          size={16}
+                          style={{ color: isExpanded ? '#7de8a5' : '#64748b' }}
+                        />
+                      ) : isExpanded ? (
                         <FolderOpen size={16} color="#7de8a5" />
                       ) : (
                         <Folder size={16} color="#64748b" />

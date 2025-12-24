@@ -1,20 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react';
-import { Folder, Check, X, ArrowLeft, Plus, Trash2, Edit2, LayoutGrid, List, Columns3, Save, Filter, ChevronDown } from 'lucide-react';
+import { Check, X, ArrowLeft, Plus, Trash2, Edit2, LayoutGrid, List, Columns3, Save, Filter, ChevronDown } from 'lucide-react';
 import type { Node } from '@/types/database';
 import ConfirmDialog from '../common/ConfirmDialog';
 import InputDialog from '../common/InputDialog';
 import { getNodeIcon } from '@/utils/nodeIcons';
+import LucideIconPicker, { DynamicIcon } from '../common/LucideIconPicker';
 import { usePersistentState } from '@/hooks/usePersistentState';
 
 type DimensionViewMode = 'grid' | 'list' | 'kanban';
 type OverlayMode = 'folders' | 'filtered';
 
+// Each column can have a primary dimension and optional secondary filter (AND logic)
+interface ColumnFilter {
+  id: string;
+  dimension: string;     // Primary dimension
+  filterBy?: string;     // Optional secondary dimension (AND filter)
+}
+
 interface SavedView {
   id: string;
   name: string;
-  filters: string[];
+  filters: string[];              // Legacy: simple dimension names
+  columnFilters?: ColumnFilter[]; // NEW: columns with optional secondary filters
   viewMode: DimensionViewMode;
   kanbanColumns?: { dimension: string; order: number }[];
   createdAt: string;
@@ -79,7 +88,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
   // Filter/View system state
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('folders');
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  // Primary column state - each column has unique ID, allows duplicate dimensions
+  const [columns, setColumns] = usePersistentState<ColumnFilter[]>('ui.viewColumns', []);
   const [filteredNodes, setFilteredNodes] = useState<Node[]>([]);
   const [filteredNodesLoading, setFilteredNodesLoading] = useState(false);
   const [showFilterPicker, setShowFilterPicker] = useState(false);
@@ -88,6 +98,16 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
   const [showSavedViewsDropdown, setShowSavedViewsDropdown] = useState(false);
+
+  // Which column is showing filter picker (by column ID)
+  const [showColumnFilterPicker, setShowColumnFilterPicker] = useState<string | null>(null);
+
+  // Derive selectedFilters for backward compatibility (unique dimensions)
+  // Memoized to prevent infinite useEffect loops
+  const selectedFilters = useMemo(() =>
+    [...new Set(columns.map(c => c.dimension))],
+    [columns]
+  );
 
   // Kanban drag-and-drop state
   const [draggedNode, setDraggedNode] = useState<{ id: number; fromDimension: string } | null>(null);
@@ -99,6 +119,15 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
   // Node priority ordering within dimensions (persisted)
   const [dimensionOrders, setDimensionOrders] = usePersistentState<Record<string, number[]>>('ui.dimensionOrders', {});
+
+  // Dimension icons (persisted) - maps dimension name to Lucide icon name
+  const [dimensionIcons, setDimensionIcons] = usePersistentState<Record<string, string>>('ui.dimensionIcons', {});
+
+  // Dimension edit modal state
+  const [editingDimensionModal, setEditingDimensionModal] = useState<DimensionSummary | null>(null);
+  const [editModalDescription, setEditModalDescription] = useState('');
+  const [editModalIcon, setEditModalIcon] = useState('Folder');
+  const [savingDimensionEdit, setSavingDimensionEdit] = useState(false);
 
   // Within-dimension reorder drag state
   const [reorderDrag, setReorderDrag] = useState<{ nodeId: number; dimension: string; index: number } | null>(null);
@@ -185,38 +214,79 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   };
 
   // Filter helper functions
-  const addFilter = (dimension: string) => {
-    if (!selectedFilters.includes(dimension)) {
-      setSelectedFilters([...selectedFilters, dimension]);
-    }
+  // Add a new column (allows duplicate dimensions)
+  const addColumn = (dimension: string) => {
+    const newColumn: ColumnFilter = {
+      id: `col-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      dimension
+    };
+    setColumns([...columns, newColumn]);
     setShowFilterPicker(false);
     setFilterSearchQuery('');
   };
 
+  // Remove a column by ID
+  const removeColumn = (columnId: string) => {
+    setColumns(columns.filter(c => c.id !== columnId));
+  };
+
+  // Legacy: remove first column with this dimension (for chip X buttons)
   const removeFilter = (dimension: string) => {
-    setSelectedFilters(selectedFilters.filter(f => f !== dimension));
+    const idx = columns.findIndex(c => c.dimension === dimension);
+    if (idx !== -1) {
+      setColumns(columns.filter((_, i) => i !== idx));
+    }
   };
 
   const clearFilters = () => {
-    setSelectedFilters([]);
+    setColumns([]);
     setActiveViewId(null);
   };
 
-  // Kanban column reorder handler
-  const handleColumnReorder = (draggedDim: string, targetDim: string) => {
-    if (draggedDim === targetDim) return;
+  // Column filter helper functions (per-column AND filters)
+  const getColumn = (columnId: string): ColumnFilter | undefined => {
+    return columns.find(c => c.id === columnId);
+  };
 
-    const currentFilters = [...selectedFilters];
-    const draggedIndex = currentFilters.indexOf(draggedDim);
-    const targetIndex = currentFilters.indexOf(targetDim);
+  const setColumnSecondaryFilter = (columnId: string, filterBy: string | undefined) => {
+    setColumns(columns.map(c =>
+      c.id === columnId ? { ...c, filterBy } : c
+    ));
+    setShowColumnFilterPicker(null);
+  };
+
+  const getColumnLabel = (column: ColumnFilter): string => {
+    return column.filterBy ? `${column.dimension} + ${column.filterBy}` : column.dimension;
+  };
+
+  const getNodesForColumnById = (columnId: string): Node[] => {
+    const column = getColumn(columnId);
+    if (!column) return [];
+    return filteredNodes.filter(node => {
+      const hasPrimary = node.dimensions?.includes(column.dimension);
+      if (!hasPrimary) return false;
+      if (column.filterBy) {
+        return node.dimensions?.includes(column.filterBy);
+      }
+      return true;
+    });
+  };
+
+  // Kanban column reorder handler (now works with column IDs)
+  const handleColumnReorder = (draggedColumnId: string, targetColumnId: string) => {
+    if (draggedColumnId === targetColumnId) return;
+
+    const currentColumns = [...columns];
+    const draggedIndex = currentColumns.findIndex(c => c.id === draggedColumnId);
+    const targetIndex = currentColumns.findIndex(c => c.id === targetColumnId);
 
     if (draggedIndex === -1 || targetIndex === -1) return;
 
     // Remove dragged item and insert at target position
-    currentFilters.splice(draggedIndex, 1);
-    currentFilters.splice(targetIndex, 0, draggedDim);
+    const [draggedItem] = currentColumns.splice(draggedIndex, 1);
+    currentColumns.splice(targetIndex, 0, draggedItem);
 
-    setSelectedFilters(currentFilters);
+    setColumns(currentColumns);
   };
 
   // Kanban drag-and-drop handler
@@ -258,7 +328,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     const newView: SavedView = {
       id: `view-${Date.now()}`,
       name: name.trim(),
-      filters: [...selectedFilters],
+      filters: selectedFilters, // Legacy: unique dimensions
+      columnFilters: columns.length > 0 ? [...columns] : undefined,
       viewMode,
       kanbanColumns: viewMode === 'kanban' ? [...kanbanColumns] : undefined,
       createdAt: new Date().toISOString()
@@ -270,7 +341,16 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
   const loadSavedView = (view: SavedView) => {
     setOverlayMode('filtered');
-    setSelectedFilters(view.filters);
+    // Load columnFilters if available, otherwise convert legacy filters
+    if (view.columnFilters && view.columnFilters.length > 0) {
+      setColumns(view.columnFilters);
+    } else {
+      // Legacy: convert simple filters to columns
+      setColumns(view.filters.map((dim, i) => ({
+        id: `col-legacy-${i}`,
+        dimension: dim
+      })));
+    }
     setViewMode(view.viewMode);
     if (view.kanbanColumns) {
       setKanbanColumns(view.kanbanColumns);
@@ -332,18 +412,18 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     setReorderDropIndex(null);
   };
 
-  // Get nodes grouped by dimension for list view
-  const getNodesGroupedByDimension = () => {
-    const groups: { dimension: string; nodes: Node[] }[] = [];
-    for (const dim of selectedFilters) {
-      const nodesInDim = filteredNodes.filter(n => n.dimensions?.includes(dim));
-      if (nodesInDim.length > 0) {
-        // Sort by dimension order
-        const sortedNodes = sortNodesByDimensionOrder(nodesInDim, dim);
-        groups.push({ dimension: dim, nodes: sortedNodes });
-      }
-    }
-    return groups;
+  // Get nodes grouped by column for list/grid views (respects column filters)
+  const getColumnsWithNodes = () => {
+    return columns.map(column => {
+      const nodesInColumn = getNodesForColumnById(column.id);
+      const sortedNodes = sortNodesByDimensionOrder(nodesInColumn, column.dimension);
+      return {
+        column,
+        label: getColumnLabel(column),
+        nodes: sortedNodes,
+        hasFilter: !!column.filterBy
+      };
+    });
   };
 
   const sortedDimensions = useMemo(() => {
@@ -641,6 +721,56 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
     setEditDescriptionText('');
   };
 
+  // Dimension edit modal handlers (from folder cards)
+  const openDimensionEditModal = (dimension: DimensionSummary) => {
+    setEditingDimensionModal(dimension);
+    setEditModalDescription(dimension.description || '');
+    setEditModalIcon(dimensionIcons[dimension.dimension] || 'Folder');
+  };
+
+  const closeDimensionEditModal = () => {
+    setEditingDimensionModal(null);
+    setEditModalDescription('');
+    setEditModalIcon('Folder');
+    setSavingDimensionEdit(false);
+  };
+
+  const saveDimensionEdit = async () => {
+    if (!editingDimensionModal) return;
+
+    setSavingDimensionEdit(true);
+    try {
+      // Save description to API
+      const response = await fetch('/api/dimensions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingDimensionModal.dimension,
+          description: editModalDescription.trim()
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update dimension');
+      }
+
+      // Save icon to localStorage
+      setDimensionIcons(prev => ({
+        ...prev,
+        [editingDimensionModal.dimension]: editModalIcon
+      }));
+
+      await fetchDimensions();
+      onDataChanged?.();
+      closeDimensionEditModal();
+    } catch (error) {
+      console.error('Error saving dimension:', error);
+      alert('Failed to save dimension. Please try again.');
+      setSavingDimensionEdit(false);
+    }
+  };
+
   const handleEditDimensionName = () => {
     if (!selectedDimension) return;
     setEditingDimensionName(true);
@@ -769,7 +899,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               }
             }}
           >
-            {/* Folder icon */}
+            {/* Dimension icon */}
             <div style={{
               width: '32px',
               height: '32px',
@@ -780,7 +910,11 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               justifyContent: 'center',
               flexShrink: 0
             }}>
-              <Folder size={16} style={{ color: dimension.isPriority ? '#22c55e' : '#666' }} />
+              <DynamicIcon
+                name={dimensionIcons[dimension.dimension] || 'Folder'}
+                size={16}
+                style={{ color: dimension.isPriority ? '#22c55e' : '#666' }}
+              />
             </div>
 
             {/* Name and count */}
@@ -824,6 +958,28 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
             {/* Action buttons - show on hover via CSS would be ideal, but inline for now */}
             <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDimensionEditModal(dimension);
+                }}
+                title="Edit"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '24px',
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#555',
+                  transition: 'color 0.15s ease'
+                }}
+              >
+                <Edit2 size={14} />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -2132,12 +2288,15 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
     // List view with dimension grouping
     if (viewMode === 'list') {
-      const groups = getNodesGroupedByDimension();
+      const groups = getColumnsWithNodes();
       return (
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
           {groups.map(group => (
-            <div key={group.dimension} style={{ marginBottom: '24px' }}>
+            <div key={group.column.id} style={{ marginBottom: '24px' }}>
               <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 fontSize: '11px',
                 fontWeight: 600,
                 color: '#22c55e',
@@ -2147,14 +2306,138 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 borderBottom: '1px solid #1a1a1a',
                 marginBottom: '8px'
               }}>
-                {group.dimension} ({group.nodes.length})
+                {/* Left side: dimension name + AND filter button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+                  <span>{group.label} ({group.nodes.length})</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowColumnFilterPicker(showColumnFilterPicker === group.column.id ? null : group.column.id);
+                    }}
+                    style={{
+                      background: group.hasFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      color: '#22c55e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      borderRadius: '4px',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      transition: 'all 0.15s',
+                      textTransform: 'uppercase'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = group.hasFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)'; }}
+                    title={group.hasFilter ? 'Change filter' : 'Add AND filter'}
+                  >
+                    <Plus size={10} />
+                    {group.hasFilter ? group.column.filterBy : 'AND'}
+                  </button>
+                  {showColumnFilterPicker === group.column.id && (
+                    <>
+                      <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                        onClick={() => setShowColumnFilterPicker(null)}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: '4px',
+                        width: '180px',
+                        maxHeight: '200px',
+                        background: '#1a1a1a',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        zIndex: 100,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                      }}>
+                        <div style={{ padding: '8px', borderBottom: '1px solid #333', fontSize: '10px', color: '#888' }}>
+                          Filter by (AND)
+                        </div>
+                        <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                          {group.hasFilter && (
+                            <button
+                              onClick={() => setColumnSecondaryFilter(group.column.id, undefined)}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                fontSize: '11px',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #333'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              Clear filter
+                            </button>
+                          )}
+                          {dimensions
+                            .filter(d => d.dimension !== group.column.dimension && d.dimension !== group.column.filterBy)
+                            .map(dim => (
+                              <button
+                                key={dim.dimension}
+                                onClick={() => setColumnSecondaryFilter(group.column.id, dim.dimension)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#ccc',
+                                  fontSize: '11px',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <span>{dim.dimension}</span>
+                                <span style={{ fontSize: '9px', color: '#666' }}>{dim.count}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {/* Right side: remove button */}
+                <button
+                  onClick={() => removeColumn(group.column.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px',
+                    cursor: 'pointer',
+                    color: '#555',
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: '4px',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; }}
+                  title="Remove column"
+                >
+                  <X size={12} />
+                </button>
               </div>
               {group.nodes.map((node, index) => (
                 <div
                   key={node.id}
                   draggable
                   onDragStart={(e) => {
-                    setReorderDrag({ nodeId: node.id, dimension: group.dimension, index });
+                    setReorderDrag({ nodeId: node.id, dimension: group.column.dimension, index });
                     e.dataTransfer.effectAllowed = 'move';
                   }}
                   onDragEnd={() => {
@@ -2163,14 +2446,14 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
-                    if (reorderDrag && reorderDrag.dimension === group.dimension && reorderDrag.nodeId !== node.id) {
+                    if (reorderDrag && reorderDrag.dimension === group.column.dimension && reorderDrag.nodeId !== node.id) {
                       setReorderDropIndex(index);
                     }
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (reorderDrag && reorderDrag.dimension === group.dimension) {
-                      handleReorderDrop(group.dimension, reorderDrag.index, index, group.nodes);
+                    if (reorderDrag && reorderDrag.dimension === group.column.dimension) {
+                      handleReorderDrop(group.column.dimension, reorderDrag.index, index, group.nodes);
                     }
                   }}
                   onClick={() => {
@@ -2185,7 +2468,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     padding: '8px 10px',
                     marginBottom: '2px',
                     background: reorderDrag?.nodeId === node.id ? '#1a2a1f' : 'transparent',
-                    border: reorderDropIndex === index && reorderDrag?.dimension === group.dimension && reorderDrag?.nodeId !== node.id
+                    border: reorderDropIndex === index && reorderDrag?.dimension === group.column.dimension && reorderDrag?.nodeId !== node.id
                       ? '1px dashed #22c55e'
                       : '1px solid transparent',
                     borderRadius: '6px',
@@ -2241,7 +2524,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   {node.dimensions && node.dimensions.length > 1 && (
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                       {node.dimensions
-                        .filter(d => d !== group.dimension)
+                        .filter((d: string) => d !== group.column.dimension)
                         .slice(0, 2)
                         .map(dim => (
                           <span
@@ -2270,12 +2553,15 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
 
     // Grid view with dimension grouping
     if (viewMode === 'grid') {
-      const groups = getNodesGroupedByDimension();
+      const groups = getColumnsWithNodes();
       return (
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
           {groups.map(group => (
-            <div key={group.dimension} style={{ marginBottom: '32px' }}>
+            <div key={group.column.id} style={{ marginBottom: '32px' }}>
               <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 fontSize: '11px',
                 fontWeight: 600,
                 color: '#22c55e',
@@ -2285,7 +2571,131 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 borderBottom: '1px solid #1a1a1a',
                 marginBottom: '16px'
               }}>
-                {group.dimension} ({group.nodes.length})
+                {/* Left side: dimension name + AND filter button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
+                  <span>{group.label} ({group.nodes.length})</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowColumnFilterPicker(showColumnFilterPicker === group.column.id ? null : group.column.id);
+                    }}
+                    style={{
+                      background: group.hasFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      color: '#22c55e',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      borderRadius: '4px',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      transition: 'all 0.15s',
+                      textTransform: 'uppercase'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = group.hasFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)'; }}
+                    title={group.hasFilter ? 'Change filter' : 'Add AND filter'}
+                  >
+                    <Plus size={10} />
+                    {group.hasFilter ? group.column.filterBy : 'AND'}
+                  </button>
+                  {showColumnFilterPicker === group.column.id && (
+                    <>
+                      <div
+                        style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                        onClick={() => setShowColumnFilterPicker(null)}
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: '4px',
+                        width: '180px',
+                        maxHeight: '200px',
+                        background: '#1a1a1a',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        zIndex: 100,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                      }}>
+                        <div style={{ padding: '8px', borderBottom: '1px solid #333', fontSize: '10px', color: '#888' }}>
+                          Filter by (AND)
+                        </div>
+                        <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                          {group.hasFilter && (
+                            <button
+                              onClick={() => setColumnSecondaryFilter(group.column.id, undefined)}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                fontSize: '11px',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                borderBottom: '1px solid #333'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              Clear filter
+                            </button>
+                          )}
+                          {dimensions
+                            .filter(d => d.dimension !== group.column.dimension && d.dimension !== group.column.filterBy)
+                            .map(dim => (
+                              <button
+                                key={dim.dimension}
+                                onClick={() => setColumnSecondaryFilter(group.column.id, dim.dimension)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#ccc',
+                                  fontSize: '11px',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <span>{dim.dimension}</span>
+                                <span style={{ fontSize: '9px', color: '#666' }}>{dim.count}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {/* Right side: remove button */}
+                <button
+                  onClick={() => removeColumn(group.column.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: '4px',
+                    cursor: 'pointer',
+                    color: '#555',
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderRadius: '4px',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; }}
+                  title="Remove column"
+                >
+                  <X size={12} />
+                </button>
               </div>
               <div
                 style={{
@@ -2294,12 +2704,12 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   gap: '10px'
                 }}
               >
-                {group.nodes.map((node, index) => (
+                {group.nodes.map((node: Node, index: number) => (
                   <div
                     key={node.id}
                     draggable
                     onDragStart={(e) => {
-                      setReorderDrag({ nodeId: node.id, dimension: group.dimension, index });
+                      setReorderDrag({ nodeId: node.id, dimension: group.column.dimension, index });
                       e.dataTransfer.effectAllowed = 'move';
                     }}
                     onDragEnd={() => {
@@ -2308,14 +2718,14 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      if (reorderDrag && reorderDrag.dimension === group.dimension && reorderDrag.nodeId !== node.id) {
+                      if (reorderDrag && reorderDrag.dimension === group.column.dimension && reorderDrag.nodeId !== node.id) {
                         setReorderDropIndex(index);
                       }
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
-                      if (reorderDrag && reorderDrag.dimension === group.dimension) {
-                        handleReorderDrop(group.dimension, reorderDrag.index, index, group.nodes);
+                      if (reorderDrag && reorderDrag.dimension === group.column.dimension) {
+                        handleReorderDrop(group.column.dimension, reorderDrag.index, index, group.nodes);
                       }
                     }}
                     onClick={() => {
@@ -2324,7 +2734,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     }}
                     style={{
                       background: reorderDrag?.nodeId === node.id ? '#1a2a1f' : '#0a0a0a',
-                      border: reorderDropIndex === index && reorderDrag?.dimension === group.dimension && reorderDrag?.nodeId !== node.id
+                      border: reorderDropIndex === index && reorderDrag?.dimension === group.column.dimension && reorderDrag?.nodeId !== node.id
                         ? '2px dashed #22c55e'
                         : '1px solid #161616',
                       borderRadius: '10px',
@@ -2398,7 +2808,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     )}
                     {node.dimensions && node.dimensions.length > 1 && (
                       <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
-                        {node.dimensions.filter(d => d !== group.dimension).slice(0, 2).map((dim) => (
+                        {node.dimensions.filter((d: string) => d !== group.column.dimension).slice(0, 2).map((dim: string) => (
                           <span
                             key={dim}
                             style={{
@@ -2424,7 +2834,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
       );
     }
 
-    // Kanban view - group by selected filters with drag-and-drop
+    // Kanban view - group by columns with drag-and-drop
     if (viewMode === 'kanban') {
       return (
         <div style={{
@@ -2435,22 +2845,24 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
           overflowX: 'auto',
           overflowY: 'hidden'
         }}>
-          {selectedFilters.map(dimension => {
-            const unsortedColumnNodes = filteredNodes.filter(n => n.dimensions?.includes(dimension));
-            const columnNodes = sortNodesByDimensionOrder(unsortedColumnNodes, dimension);
-            const isDropTarget = dropTargetDimension === dimension;
-            const isColumnDropTarget = columnDropTarget === dimension && draggedColumn !== dimension;
-            const isBeingDragged = draggedColumn === dimension;
+          {columns.map(column => {
+            const unsortedColumnNodes = getNodesForColumnById(column.id);
+            const columnNodes = sortNodesByDimensionOrder(unsortedColumnNodes, column.dimension);
+            const columnLabel = getColumnLabel(column);
+            const hasSecondaryFilter = !!column.filterBy;
+            const isDropTarget = dropTargetDimension === column.id;
+            const isColumnDropTarget = columnDropTarget === column.id && draggedColumn !== column.id;
+            const isBeingDragged = draggedColumn === column.id;
             return (
               <div
-                key={dimension}
+                key={column.id}
                 onDragOver={(e) => {
                   e.preventDefault();
                   // If dragging a column, set column drop target
                   if (draggedColumn) {
-                    setColumnDropTarget(dimension);
+                    setColumnDropTarget(column.id);
                   } else {
-                    setDropTargetDimension(dimension);
+                    setDropTargetDimension(column.id);
                   }
                 }}
                 onDragLeave={(e) => {
@@ -2463,14 +2875,14 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 onDrop={(e) => {
                   e.preventDefault();
                   // Handle column reorder
-                  if (draggedColumn && draggedColumn !== dimension) {
-                    handleColumnReorder(draggedColumn, dimension);
+                  if (draggedColumn && draggedColumn !== column.id) {
+                    handleColumnReorder(draggedColumn, column.id);
                     setDraggedColumn(null);
                     setColumnDropTarget(null);
                   }
                   // Handle node drop
-                  else if (draggedNode && draggedNode.fromDimension !== dimension) {
-                    handleKanbanDrop(draggedNode.id, draggedNode.fromDimension, dimension);
+                  else if (draggedNode && draggedNode.fromDimension !== column.dimension) {
+                    handleKanbanDrop(draggedNode.id, draggedNode.fromDimension, column.dimension);
                   }
                   setDraggedNode(null);
                   setDropTargetDimension(null);
@@ -2480,8 +2892,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   minWidth: '280px',
                   display: 'flex',
                   flexDirection: 'column',
-                  background: isColumnDropTarget ? '#1a1a2a' : (isDropTarget ? '#0d1a12' : '#0a0a0a'),
-                  border: isColumnDropTarget ? '1px solid #6366f1' : (isDropTarget ? '1px solid #22c55e' : '1px solid #1a1a1a'),
+                  background: isColumnDropTarget ? '#0d1a12' : (isDropTarget ? '#0d1a12' : '#0a0a0a'),
+                  border: isColumnDropTarget ? '1px solid #22c55e' : (isDropTarget ? '1px solid #22c55e' : '1px solid #1a1a1a'),
                   borderRadius: '12px',
                   transition: 'all 0.15s ease',
                   opacity: isBeingDragged ? 0.5 : 1
@@ -2491,7 +2903,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 <div
                   draggable
                   onDragStart={(e) => {
-                    setDraggedColumn(dimension);
+                    setDraggedColumn(column.id);
                     e.dataTransfer.effectAllowed = 'move';
                   }}
                   onDragEnd={() => {
@@ -2508,7 +2920,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     userSelect: 'none'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
                     <span style={{
                       fontSize: '10px',
                       color: '#555',
@@ -2521,7 +2933,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em'
                     }}>
-                      {dimension}
+                      {columnLabel}
                     </span>
                     <span style={{
                       fontSize: '11px',
@@ -2532,18 +2944,120 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     }}>
                       {columnNodes.length}
                     </span>
+                    {/* AND filter button - inline with column name */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowColumnFilterPicker(showColumnFilterPicker === column.id ? null : column.id);
+                      }}
+                      style={{
+                        background: hasSecondaryFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)',
+                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                        padding: '3px 8px',
+                        cursor: 'pointer',
+                        color: '#22c55e',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        borderRadius: '4px',
+                        fontSize: '9px',
+                        fontWeight: 600,
+                        transition: 'all 0.15s',
+                        textTransform: 'uppercase'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34, 197, 94, 0.3)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = hasSecondaryFilter ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.1)'; }}
+                      title={hasSecondaryFilter ? 'Change filter' : 'Add AND filter'}
+                    >
+                      <Plus size={10} />
+                      {hasSecondaryFilter ? column.filterBy : 'AND'}
+                    </button>
+                    {showColumnFilterPicker === column.id && (
+                      <>
+                        <div
+                          style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                          onClick={() => setShowColumnFilterPicker(null)}
+                        />
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: '4px',
+                          width: '180px',
+                          maxHeight: '200px',
+                          background: '#1a1a1a',
+                          border: '1px solid #333',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          zIndex: 100,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                        }}>
+                          <div style={{ padding: '8px', borderBottom: '1px solid #333', fontSize: '10px', color: '#888' }}>
+                            Filter by (AND)
+                          </div>
+                          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                            {hasSecondaryFilter && (
+                              <button
+                                onClick={() => setColumnSecondaryFilter(column.id, undefined)}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#ef4444',
+                                  fontSize: '11px',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid #333'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                Clear filter
+                              </button>
+                            )}
+                            {dimensions
+                              .filter(d => d.dimension !== column.dimension && d.dimension !== column.filterBy)
+                              .map(dim => (
+                                <button
+                                  key={dim.dimension}
+                                  onClick={() => setColumnSecondaryFilter(column.id, dim.dimension)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#ccc',
+                                    fontSize: '11px',
+                                    textAlign: 'left',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#2a2a2a'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                  <span>{dim.dimension}</span>
+                                  <span style={{ fontSize: '9px', color: '#666' }}>{dim.count}</span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
                   {columnNodes.map((node, index) => {
-                    const isReorderTarget = reorderDropIndex === index && reorderDrag?.dimension === dimension && reorderDrag?.nodeId !== node.id;
+                    const isReorderTarget = reorderDropIndex === index && reorderDrag?.dimension === column.dimension && reorderDrag?.nodeId !== node.id;
                     return (
                     <div
                       key={node.id}
                       draggable
                       onDragStart={(e) => {
-                        setDraggedNode({ id: node.id, fromDimension: dimension });
-                        setReorderDrag({ nodeId: node.id, dimension, index });
+                        setDraggedNode({ id: node.id, fromDimension: column.dimension });
+                        setReorderDrag({ nodeId: node.id, dimension: column.dimension, index });
                         e.dataTransfer.effectAllowed = 'move';
                       }}
                       onDragEnd={() => {
@@ -2556,7 +3070,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         e.preventDefault();
                         e.stopPropagation();
                         // If dragging within same column, show reorder indicator
-                        if (reorderDrag && reorderDrag.dimension === dimension && reorderDrag.nodeId !== node.id) {
+                        if (reorderDrag && reorderDrag.dimension === column.dimension && reorderDrag.nodeId !== node.id) {
                           setReorderDropIndex(index);
                         }
                       }}
@@ -2564,8 +3078,8 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         e.preventDefault();
                         e.stopPropagation();
                         // Handle within-column reorder
-                        if (reorderDrag && reorderDrag.dimension === dimension && reorderDrag.nodeId !== node.id) {
-                          handleReorderDrop(dimension, reorderDrag.index, index, columnNodes);
+                        if (reorderDrag && reorderDrag.dimension === column.dimension && reorderDrag.nodeId !== node.id) {
+                          handleReorderDrop(column.dimension, reorderDrag.index, index, columnNodes);
                         }
                       }}
                       onClick={() => {
@@ -2628,7 +3142,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       {node.dimensions && node.dimensions.length > 1 && (
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' }}>
                           {node.dimensions
-                            .filter(d => d !== dimension)
+                            .filter((d: string) => d !== column.dimension)
                             .slice(0, 2)
                             .map(dim => (
                               <span
@@ -2734,7 +3248,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     transition: 'color 0.15s'
                   }}
                 >
-                  <Folder size={14} style={{ color: overlayMode === 'folders' ? '#22c55e' : '#555' }} />
+                  <DynamicIcon name="Folder" size={14} style={{ color: overlayMode === 'folders' ? '#22c55e' : '#555' }} />
                   Folders
                 </button>
                 <button
@@ -3022,6 +3536,11 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     letterSpacing: '0.02em'
                   }}
                 >
+                  <DynamicIcon
+                    name={dimensionIcons[filter] || 'Folder'}
+                    size={10}
+                    style={{ opacity: 0.8 }}
+                  />
                   {filter}
                   <button
                     onClick={() => removeFilter(filter)}
@@ -3052,20 +3571,35 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   style={{
                     display: 'flex',
                     alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 10px 4px 4px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: '#22c55e',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    fontSize: '11px',
+                    fontWeight: 500
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#151515'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
                     justifyContent: 'center',
                     width: '20px',
                     height: '20px',
-                    background: 'transparent',
-                    border: '1px dashed #333',
-                    borderRadius: '4px',
-                    color: '#555',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.color = '#22c55e'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.color = '#555'; }}
-                >
-                  <Plus size={12} />
+                    borderRadius: '50%',
+                    background: '#22c55e',
+                    color: '#0a0a0a',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                    fontWeight: 300,
+                    flexShrink: 0
+                  }}>+</span>
+                  Add Filter
                 </button>
                 {showFilterPicker && (
                   <>
@@ -3107,13 +3641,12 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
                         {dimensions
                           .filter(d =>
-                            d.dimension.toLowerCase().includes(filterSearchQuery.toLowerCase()) &&
-                            !selectedFilters.includes(d.dimension)
+                            d.dimension.toLowerCase().includes(filterSearchQuery.toLowerCase())
                           )
                           .map(dim => (
                             <button
                               key={dim.dimension}
-                              onClick={() => addFilter(dim.dimension)}
+                              onClick={() => addColumn(dim.dimension)}
                               style={{
                                 width: '100%',
                                 padding: '8px 12px',
@@ -3213,6 +3746,214 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
       onConfirm={saveCurrentView}
       onCancel={() => setShowSaveViewDialog(false)}
     />
+
+    {/* Dimension Edit Modal */}
+    {editingDimensionModal && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeDimensionEditModal();
+        }}
+      >
+        <div
+          style={{
+            background: '#0a0a0a',
+            border: '1px solid #333',
+            borderRadius: '12px',
+            width: '480px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          {/* Header */}
+          <div style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid #1a1a1a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: editingDimensionModal.isPriority ? 'rgba(34, 197, 94, 0.1)' : '#111',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <DynamicIcon
+                  name={editModalIcon}
+                  size={16}
+                  style={{ color: editingDimensionModal.isPriority ? '#22c55e' : '#888' }}
+                />
+              </div>
+              <div>
+                <div style={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: '#e5e5e5'
+                }}>
+                  Edit Dimension
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  color: editingDimensionModal.isPriority ? '#22c55e' : '#888'
+                }}>
+                  {editingDimensionModal.dimension}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={closeDimensionEditModal}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#666'
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div style={{
+            padding: '20px',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            {/* Description */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#888',
+                marginBottom: '8px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                Description
+              </label>
+              <textarea
+                value={editModalDescription}
+                onChange={(e) => setEditModalDescription(e.target.value)}
+                placeholder="Describe what this dimension is for..."
+                maxLength={500}
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '12px',
+                  background: '#111',
+                  border: '1px solid #333',
+                  borderRadius: '8px',
+                  color: '#e5e5e5',
+                  fontSize: '13px',
+                  resize: 'vertical',
+                  outline: 'none'
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#22c55e';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#333';
+                }}
+              />
+              <div style={{
+                marginTop: '4px',
+                fontSize: '11px',
+                color: '#555',
+                textAlign: 'right'
+              }}>
+                {editModalDescription.length}/500
+              </div>
+            </div>
+
+            {/* Icon Picker */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#888',
+                marginBottom: '8px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                Icon
+              </label>
+              <LucideIconPicker
+                selectedIcon={editModalIcon}
+                onSelect={setEditModalIcon}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            padding: '16px 20px',
+            borderTop: '1px solid #1a1a1a',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '8px'
+          }}>
+            <button
+              onClick={closeDimensionEditModal}
+              style={{
+                padding: '8px 16px',
+                background: 'transparent',
+                border: '1px solid #333',
+                borderRadius: '6px',
+                color: '#888',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveDimensionEdit}
+              disabled={savingDimensionEdit}
+              style={{
+                padding: '8px 16px',
+                background: '#22c55e',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#000',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: savingDimensionEdit ? 'not-allowed' : 'pointer',
+                opacity: savingDimensionEdit ? 0.6 : 1
+              }}
+            >
+              {savingDimensionEdit ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   );
 }

@@ -66,15 +66,20 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .slice(0, 5);
 
-    // Auto-assign locked dimensions for all new nodes
-    const autoAssignedDimensions = await DimensionService.assignLockedDimensions({
+    // Auto-assign locked dimensions + keyword dimensions for all new nodes
+    const { locked, keywords } = await DimensionService.assignDimensions({
       title: body.title,
       content: rawContent || undefined,
       link: body.link
     });
 
-    // Combine provided and auto-assigned dimensions, remove duplicates
-    const finalDimensions = [...new Set([...trimmedProvidedDimensions, ...autoAssignedDimensions])]
+    // Ensure keyword dimensions exist in the database (create if new)
+    for (const keyword of keywords) {
+      await DimensionService.ensureKeywordDimension(keyword);
+    }
+
+    // Combine provided, locked, and keyword dimensions, remove duplicates
+    const finalDimensions = [...new Set([...trimmedProvidedDimensions, ...locked, ...keywords])]
       .slice(0, 5); // Ensure we don't exceed 5 total dimensions
     const rawChunk = typeof body.chunk === 'string' ? body.chunk : null;
     let chunkToStore = rawChunk;

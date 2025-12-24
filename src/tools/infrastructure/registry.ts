@@ -11,6 +11,8 @@ import { updateDimensionTool } from '../database/updateDimension';
 import { lockDimensionTool } from '../database/lockDimension';
 import { unlockDimensionTool } from '../database/unlockDimension';
 import { deleteDimensionTool } from '../database/deleteDimension';
+import { queryDimensionsTool } from '../database/queryDimensions';
+import { getDimensionTool } from '../database/getDimension';
 import { searchContentEmbeddingsTool } from '../other/searchContentEmbeddings';
 import { webSearchTool } from '../other/webSearch';
 import { thinkTool } from '../other/think';
@@ -27,6 +29,8 @@ const CORE_TOOLS: Record<string, any> = {
   queryNodes: queryNodesTool,
   getNodesById: getNodesByIdTool,
   queryEdge: queryEdgeTool,
+  queryDimensions: queryDimensionsTool,
+  getDimension: getDimensionTool,
   searchContentEmbeddings: searchContentEmbeddingsTool,
 };
 
