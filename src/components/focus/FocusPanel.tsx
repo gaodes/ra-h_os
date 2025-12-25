@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type DragEvent } from 'react';
 import { Eye, Trash2, Link, Loader, Database, Check } from 'lucide-react';
 import { parseAndRenderContent } from '@/components/helpers/NodeLabelRenderer';
 import { parseNodeMarkers } from '@/tools/infrastructure/nodeFormatter';
@@ -1461,17 +1461,29 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
 
             {/* Title Row with ID and Trash */}
             <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {/* Node ID */}
-              <span style={{
-                display: 'inline-block',
-                background: '#22c55e',
-                color: '#0a0a0a',
-                fontSize: '10px',
-                fontWeight: 600,
-                padding: '2px 6px',
-                borderRadius: '4px',
-                flexShrink: 0
-              }}>
+              {/* Node ID - Draggable */}
+              <span
+                draggable
+                onDragStart={(e: DragEvent<HTMLSpanElement>) => {
+                  const title = nodesData[activeTab]?.title || 'Untitled';
+                  e.dataTransfer.effectAllowed = 'copyMove';
+                  e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: activeTab, title }));
+                  e.dataTransfer.setData('application/node-info', JSON.stringify({ id: activeTab, title, dimensions: nodesData[activeTab]?.dimensions || [] }));
+                  e.dataTransfer.setData('text/plain', `[NODE:${activeTab}:"${title}"]`);
+                }}
+                style={{
+                  display: 'inline-block',
+                  background: '#22c55e',
+                  color: '#0a0a0a',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  flexShrink: 0,
+                  cursor: 'grab'
+                }}
+                title="Drag to chat to reference this node"
+              >
                 #{activeTab}
               </span>
 

@@ -389,16 +389,20 @@ export default function NodesPanel({ selectedNodes, onNodeSelect, onNodeCreated,
   };
 
   const handleNodeDragStart = (event: DragEvent<HTMLElement>, node: Node) => {
-    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.effectAllowed = 'copyMove';
     const nodeData = {
       id: node.id,
+      title: node.title || 'Untitled',
       dimensions: node.dimensions || []
     };
     // Store in ref for webview compatibility (dataTransfer.getData can fail in Electron/Tauri)
     draggedNodeRef.current = nodeData;
-    // Also set in dataTransfer for browser compatibility
+    // Set multiple MIME types for different drop targets
     event.dataTransfer.setData('application/node-info', JSON.stringify(nodeData));
-    event.dataTransfer.setData('text/plain', JSON.stringify(nodeData));
+    // For chat input drops - includes title for [NODE:id:"title"] token
+    event.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: node.id, title: node.title || 'Untitled' }));
+    // Fallback for browsers/webviews that only support text/plain
+    event.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${node.title || 'Untitled'}"]`);
 
     const preview = document.createElement('div');
     preview.textContent = node.title || `Node #${node.id}`;

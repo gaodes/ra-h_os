@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react';
-import { Check, X, ArrowLeft, Plus, Trash2, Edit2, LayoutGrid, List, Columns3, Save, Filter, ChevronDown } from 'lucide-react';
+import { Check, X, ArrowLeft, Plus, Trash2, Edit2, LayoutGrid, List, Columns3, Save, Filter, ChevronDown, Lock } from 'lucide-react';
 import type { Node } from '@/types/database';
 import ConfirmDialog from '../common/ConfirmDialog';
 import InputDialog from '../common/InputDialog';
@@ -64,7 +64,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   const [editingDimensionName, setEditingDimensionName] = useState<boolean>(false);
   const [editDimensionNameText, setEditDimensionNameText] = useState('');
   const [showAddDimensionDialog, setShowAddDimensionDialog] = useState(false);
-  const draggedNodeRef = useRef<{ id: number; dimensions?: string[] } | null>(null);
+  const draggedNodeRef = useRef<{ id: number; title?: string; dimensions?: string[] } | null>(null);
 
   // View mode state (persisted)
   const [viewMode, setViewMode] = usePersistentState<DimensionViewMode>('ui.dimensionViewMode', 'grid');
@@ -557,16 +557,20 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   };
 
   const handleNodeTileDragStart = (event: DragEvent<HTMLDivElement>, node: Node) => {
-    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.effectAllowed = 'copyMove';
     const nodeData = {
       id: node.id,
+      title: node.title || 'Untitled',
       dimensions: node.dimensions || []
     };
     // Store in ref for webview compatibility (dataTransfer.getData can fail in Electron/Tauri)
     draggedNodeRef.current = nodeData;
-    // Also set in dataTransfer for browser compatibility
+    // Set multiple MIME types for different drop targets
     event.dataTransfer.setData('application/node-info', JSON.stringify(nodeData));
-    event.dataTransfer.setData('text/plain', JSON.stringify(nodeData));
+    // For chat input drops - includes title for [NODE:id:"title"] token
+    event.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: node.id, title: node.title || 'Untitled' }));
+    // Fallback for browsers/webviews that only support text/plain
+    event.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${node.title || 'Untitled'}"]`);
 
      // Provide a compact drag preview so drop targets stay visible
     const preview = document.createElement('div');
@@ -851,184 +855,196 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '20px',
+          padding: '24px',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-          gap: '10px',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '8px',
           alignContent: 'start'
         }}
       >
-        {sortedDimensions.map((dimension) => (
-          <div
-            key={dimension.dimension}
-            role="button"
-            tabIndex={0}
-            onClick={() => handleSelectDimension(dimension)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                handleSelectDimension(dimension);
-              }
-            }}
-            onDragOver={(event) => handleDimensionDragOver(event)}
-            onDragEnter={(event) => handleDimensionDragEnter(event, dimension.dimension)}
-            onDragLeave={(event) => handleDimensionDragLeave(event, dimension.dimension)}
-            onDrop={(event) => handleNodeDropOnDimension(event, dimension.dimension)}
-            style={{
-              background: dragHoverDimension === dimension.dimension ? '#0d1a12' : '#0a0a0a',
-              border: dimension.isPriority ? '1px solid #1a3a25' : '1px solid #1a1a1a',
-              borderRadius: '10px',
-              padding: '14px 16px',
-              textAlign: 'left',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (dragHoverDimension !== dimension.dimension) {
-                e.currentTarget.style.background = '#111';
-                e.currentTarget.style.borderColor = dimension.isPriority ? '#22c55e' : '#333';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (dragHoverDimension !== dimension.dimension) {
-                e.currentTarget.style.background = '#0a0a0a';
-                e.currentTarget.style.borderColor = dimension.isPriority ? '#1a3a25' : '#1a1a1a';
-              }
-            }}
-          >
-            {/* Dimension icon */}
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              background: dimension.isPriority ? 'rgba(34, 197, 94, 0.1)' : '#111',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <DynamicIcon
-                name={dimensionIcons[dimension.dimension] || 'Folder'}
-                size={16}
-                style={{ color: dimension.isPriority ? '#22c55e' : '#666' }}
-              />
-            </div>
+        {sortedDimensions.map((dimension) => {
+          const isLocked = dimension.isPriority;
+          const isDragTarget = dragHoverDimension === dimension.dimension;
 
-            {/* Name and count */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+          return (
+            <div
+              key={dimension.dimension}
+              role="button"
+              tabIndex={0}
+              onClick={() => handleSelectDimension(dimension)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleSelectDimension(dimension);
+                }
+              }}
+              onDragOver={(event) => handleDimensionDragOver(event)}
+              onDragEnter={(event) => handleDimensionDragEnter(event, dimension.dimension)}
+              onDragLeave={(event) => handleDimensionDragLeave(event, dimension.dimension)}
+              onDrop={(event) => handleNodeDropOnDimension(event, dimension.dimension)}
+              style={{
+                background: isDragTarget ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+                borderLeft: isLocked ? '2px solid #22c55e' : '2px solid transparent',
+                borderRadius: '6px',
+                padding: '12px 14px',
+                textAlign: 'left',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.12s ease',
+                position: 'relative'
+              }}
+              onMouseEnter={(e) => {
+                if (!isDragTarget) {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isDragTarget) {
+                  e.currentTarget.style.background = 'transparent';
+                }
+              }}
+            >
+              {/* Dimension icon */}
               <div style={{
-                fontSize: '13px',
-                fontWeight: 600,
-                color: dimension.isPriority ? '#22c55e' : '#e5e5e5',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                background: isLocked ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
               }}>
-                {dimension.dimension}
+                <DynamicIcon
+                  name={dimensionIcons[dimension.dimension] || 'Folder'}
+                  size={14}
+                  style={{ color: isLocked ? '#22c55e' : '#555' }}
+                />
               </div>
-              {dimension.description && (
+
+              {/* Name and description */}
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
-                  fontSize: '11px',
-                  color: '#666',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: isLocked ? '#f0f0f0' : '#999',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  marginTop: '2px'
+                  letterSpacing: '-0.01em'
                 }}>
-                  {dimension.description}
+                  {dimension.dimension}
                 </div>
-              )}
-            </div>
+                {dimension.description && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#555',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    marginTop: '1px'
+                  }}>
+                    {dimension.description}
+                  </div>
+                )}
+              </div>
 
-            {/* Count badge */}
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: dimension.isPriority ? '#22c55e' : '#666',
-              background: dimension.isPriority ? 'rgba(34, 197, 94, 0.1)' : '#1a1a1a',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              flexShrink: 0
-            }}>
-              {dimension.count}
-            </span>
+              {/* Count - minimal */}
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 500,
+                color: isLocked ? '#22c55e' : '#444',
+                fontFamily: 'monospace',
+                flexShrink: 0
+              }}>
+                {dimension.count}
+              </span>
 
-            {/* Action buttons - show on hover via CSS would be ideal, but inline for now */}
-            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openDimensionEditModal(dimension);
-                }}
-                title="Edit"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '24px',
-                  height: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#555',
-                  transition: 'color 0.15s ease'
-                }}
+              {/* Action buttons - subtle */}
+              <div style={{ display: 'flex', gap: '2px', flexShrink: 0, opacity: 0.4 }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
               >
-                <Edit2 size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleLock(dimension.dimension);
-                }}
-                title={dimension.isPriority ? 'Unpin' : 'Pin'}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '24px',
-                  height: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: dimension.isPriority ? '#22c55e' : '#555',
-                  transition: 'color 0.15s ease'
-                }}
-              >
-                <Check size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDimensionPendingDelete(dimension.dimension);
-                }}
-                title="Delete"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '24px',
-                  height: '24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: deletingDimension === dimension.dimension ? 'not-allowed' : 'pointer',
-                  color: '#555',
-                  opacity: deletingDimension === dimension.dimension ? 0.4 : 1,
-                  transition: 'color 0.15s ease'
-                }}
-                disabled={deletingDimension === dimension.dimension}
-              >
-                <Trash2 size={14} />
-              </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openDimensionEditModal(dimension);
+                  }}
+                  title="Edit"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    width: '22px',
+                    height: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#666',
+                    transition: 'color 0.1s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#999'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
+                >
+                  <Edit2 size={12} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleLock(dimension.dimension);
+                  }}
+                  title={isLocked ? 'Unlock' : 'Lock'}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    width: '22px',
+                    height: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: isLocked ? '#22c55e' : '#666',
+                    transition: 'color 0.1s ease'
+                  }}
+                  onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.color = '#22c55e'; }}
+                  onMouseLeave={(e) => { if (!isLocked) e.currentTarget.style.color = '#666'; }}
+                >
+                  {isLocked ? <Check size={12} /> : <Lock size={12} />}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDimensionPendingDelete(dimension.dimension);
+                  }}
+                  title="Delete"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    width: '22px',
+                    height: '22px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: deletingDimension === dimension.dimension ? 'not-allowed' : 'pointer',
+                    color: '#666',
+                    opacity: deletingDimension === dimension.dimension ? 0.3 : 1,
+                    transition: 'color 0.1s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
+                  disabled={deletingDimension === dimension.dimension}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -1055,13 +1071,23 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
   const handleKanbanNodeDragStart = (e: DragEvent<HTMLDivElement>, nodeId: number, fromColumn: string) => {
     setDraggedNodeId(nodeId);
     setDraggedFromColumn(fromColumn);
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = 'copyMove';
+    // Find the node to get its title for chat drops
+    const node = nodes.find(n => n.id === nodeId);
+    const title = node?.title || 'Untitled';
+    // Set MIME types for chat input and folder drops
+    e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: nodeId, title }));
+    e.dataTransfer.setData('application/node-info', JSON.stringify({ id: nodeId, title, dimensions: node?.dimensions || [] }));
+    e.dataTransfer.setData('text/plain', `[NODE:${nodeId}:"${title}"]`);
+    // Store in ref for webview compatibility
+    draggedNodeRef.current = { id: nodeId, title, dimensions: node?.dimensions || [] };
   };
 
   const handleKanbanNodeDragEnd = () => {
     setDraggedNodeId(null);
     setDraggedFromColumn(null);
     setDragOverColumn(null);
+    draggedNodeRef.current = null;
   };
 
   const handleKanbanColumnDragOver = (e: DragEvent<HTMLDivElement>, columnDimension: string) => {
@@ -1153,17 +1179,15 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
           style={{
             background: '#0a0a0a',
             border: '1px solid #161616',
-            borderRadius: '16px',
-            padding: '20px',
+            borderRadius: '12px',
+            padding: '14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '6px',
             cursor: 'pointer',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             position: 'relative',
-            minHeight: '200px',
-            maxHeight: '200px',
-            overflow: 'hidden',
+            minHeight: '120px',
             boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)'
           }}
           onMouseEnter={(e) => {
@@ -1177,34 +1201,42 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
             e.currentTarget.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.2)';
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', flex: 1 }}>
-              <span style={{ flexShrink: 0 }}>
-                {getNodeIcon(node)}
-              </span>
-              <div style={{
-                fontSize: '14px',
-                fontWeight: 600,
-                color: '#f8fafc',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                lineHeight: '1.2'
-              }}>
-                {node.title || 'Untitled'}
-              </div>
-            </div>
+          {/* Header: ID | Title | Icon */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{
-              fontSize: '10px',
-              color: '#22c55e',
-              background: 'rgba(34, 197, 94, 0.1)',
-              padding: '2px 6px',
-              borderRadius: '6px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#22c55e',
+              color: '#0a0a0a',
+              fontSize: '9px',
               fontWeight: 600,
-              flexShrink: 0
+              padding: '1px 5px',
+              borderRadius: '3px',
+              flexShrink: 0,
+              fontFamily: 'monospace',
+              lineHeight: 1,
+              height: '16px'
             }}>
               #{node.id}
             </span>
+            <div style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#f8fafc',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: '1.2',
+              flex: 1
+            }}>
+              {node.title || 'Untitled'}
+            </div>
+            {node.link && (
+              <span style={{ flexShrink: 0 }}>
+                {getNodeIcon(node)}
+              </span>
+            )}
           </div>
           {node.content && (
             <div style={{
@@ -1213,31 +1245,16 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               lineHeight: '1.4',
               overflow: 'hidden',
               display: '-webkit-box',
-              WebkitLineClamp: 3,
+              WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               fontWeight: 400
             }}>
               {getContentPreview(node.content)}
             </div>
           )}
-          {node.link && (
-            <div style={{
-              fontSize: '11px',
-              color: '#60a5fa',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              background: 'rgba(96, 165, 250, 0.1)',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              fontWeight: 500
-            }}>
-              {node.link}
-            </div>
-          )}
           {node.dimensions && node.dimensions.length > 0 && (
-            <div style={{ display: 'flex', gap: '6px', overflow: 'hidden', flexWrap: 'wrap' }}>
-              {node.dimensions.slice(0, 4).map((dimension, index) => {
+            <div style={{ display: 'flex', gap: '6px', overflow: 'hidden', flexWrap: 'nowrap' }}>
+              {node.dimensions.slice(0, 3).map((dimension, index) => {
                 const isCurrentDimension = dimension === selectedDimension?.dimension;
                 return (
                   <span
@@ -1254,23 +1271,28 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       borderRadius: '8px',
                       whiteSpace: 'nowrap',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.025em'
+                      letterSpacing: '0.025em',
+                      flexShrink: 0,
+                      maxWidth: '100px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
                     }}
                   >
                     {dimension}
                   </span>
                 );
               })}
-              {node.dimensions.length > 4 && (
+              {node.dimensions.length > 3 && (
                 <span style={{
                   fontSize: '10px',
                   color: '#64748b',
                   fontWeight: 500,
                   padding: '3px 6px',
                   background: 'rgba(100, 116, 139, 0.1)',
-                  borderRadius: '6px'
+                  borderRadius: '6px',
+                  flexShrink: 0
                 }}>
-                  +{node.dimensions.length - 4}
+                  +{node.dimensions.length - 3}
                 </span>
               )}
             </div>
@@ -1410,12 +1432,19 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               )}
 
               <span style={{
-                fontSize: '10px',
-                color: '#22c55e',
-                background: 'rgba(34, 197, 94, 0.1)',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                fontWeight: 500
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#22c55e',
+                color: '#0a0a0a',
+                fontSize: '9px',
+                fontWeight: 600,
+                padding: '1px 5px',
+                borderRadius: '3px',
+                flexShrink: 0,
+                fontFamily: 'monospace',
+                lineHeight: 1,
+                height: '16px'
               }}>
                 #{node.id}
               </span>
@@ -1856,12 +1885,19 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       </div>
                     )}
                     <span style={{
-                      fontSize: '10px',
-                      color: '#22c55e',
-                      background: 'rgba(34, 197, 94, 0.1)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontWeight: 500
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: '#22c55e',
+                      color: '#0a0a0a',
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      padding: '1px 5px',
+                      borderRadius: '3px',
+                      flexShrink: 0,
+                      fontFamily: 'monospace',
+                      lineHeight: 1,
+                      height: '16px'
                     }}>
                       #{node.id}
                     </span>
@@ -2345,7 +2381,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       <div style={{
                         position: 'absolute',
                         top: '100%',
-                        right: 0,
+                        left: 0,
                         marginTop: '4px',
                         width: '180px',
                         maxHeight: '200px',
@@ -2438,11 +2474,19 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                   draggable
                   onDragStart={(e) => {
                     setReorderDrag({ nodeId: node.id, dimension: group.column.dimension, index });
-                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.effectAllowed = 'copyMove';
+                    // Set MIME types for chat input and folder drops
+                    const title = node.title || 'Untitled';
+                    e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: node.id, title }));
+                    e.dataTransfer.setData('application/node-info', JSON.stringify({ id: node.id, title, dimensions: node.dimensions || [] }));
+                    e.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${title}"]`);
+                    // Store in ref for webview compatibility
+                    draggedNodeRef.current = { id: node.id, title, dimensions: node.dimensions || [] };
                   }}
                   onDragEnd={() => {
                     setReorderDrag(null);
                     setReorderDropIndex(null);
+                    draggedNodeRef.current = null;
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -2491,13 +2535,21 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     userSelect: 'none'
                   }}>⋮⋮</span>
                   <span style={{
-                    fontSize: '10px',
-                    color: '#22c55e',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#22c55e',
+                    color: '#0a0a0a',
+                    fontSize: '9px',
                     fontWeight: 600,
+                    padding: '1px 5px',
+                    borderRadius: '3px',
+                    flexShrink: 0,
                     fontFamily: 'monospace',
-                    opacity: 0.7
+                    lineHeight: 1,
+                    height: '16px'
                   }}>
-                    {node.id}
+                    #{node.id}
                   </span>
                   <div style={{
                     width: '24px',
@@ -2610,7 +2662,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       <div style={{
                         position: 'absolute',
                         top: '100%',
-                        right: 0,
+                        left: 0,
                         marginTop: '4px',
                         width: '180px',
                         maxHeight: '200px',
@@ -2710,11 +2762,19 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     draggable
                     onDragStart={(e) => {
                       setReorderDrag({ nodeId: node.id, dimension: group.column.dimension, index });
-                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.effectAllowed = 'copyMove';
+                      // Set MIME types for chat input and folder drops
+                      const title = node.title || 'Untitled';
+                      e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: node.id, title }));
+                      e.dataTransfer.setData('application/node-info', JSON.stringify({ id: node.id, title, dimensions: node.dimensions || [] }));
+                      e.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${title}"]`);
+                      // Store in ref for webview compatibility
+                      draggedNodeRef.current = { id: node.id, title, dimensions: node.dimensions || [] };
                     }}
                     onDragEnd={() => {
                       setReorderDrag(null);
                       setReorderDropIndex(null);
+                      draggedNodeRef.current = null;
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -2771,14 +2831,21 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         marginTop: '2px'
                       }}>⋮⋮</span>
                       <span style={{
-                        fontSize: '10px',
-                        color: '#22c55e',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#22c55e',
+                        color: '#0a0a0a',
+                        fontSize: '9px',
                         fontWeight: 600,
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        flexShrink: 0,
                         fontFamily: 'monospace',
-                        opacity: 0.7,
-                        marginTop: '2px'
+                        lineHeight: 1,
+                        height: '16px'
                       }}>
-                        {node.id}
+                        #{node.id}
                       </span>
                       <span style={{ flexShrink: 0, marginTop: '1px' }}>{getNodeIcon(node)}</span>
                       <div style={{
@@ -2981,7 +3048,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         <div style={{
                           position: 'absolute',
                           top: '100%',
-                          right: 0,
+                          left: 0,
                           marginTop: '4px',
                           width: '180px',
                           maxHeight: '200px',
@@ -3058,13 +3125,21 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       onDragStart={(e) => {
                         setDraggedNode({ id: node.id, fromDimension: column.dimension });
                         setReorderDrag({ nodeId: node.id, dimension: column.dimension, index });
-                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.effectAllowed = 'copyMove';
+                        // Set MIME types for chat input and folder drops
+                        const title = node.title || 'Untitled';
+                        e.dataTransfer.setData('application/x-rah-node', JSON.stringify({ id: node.id, title }));
+                        e.dataTransfer.setData('application/node-info', JSON.stringify({ id: node.id, title, dimensions: node.dimensions || [] }));
+                        e.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${title}"]`);
+                        // Store in ref for webview compatibility
+                        draggedNodeRef.current = { id: node.id, title, dimensions: node.dimensions || [] };
                       }}
                       onDragEnd={() => {
                         setDraggedNode(null);
                         setDropTargetDimension(null);
                         setReorderDrag(null);
                         setReorderDropIndex(null);
+                        draggedNodeRef.current = null;
                       }}
                       onDragOver={(e) => {
                         e.preventDefault();
@@ -3118,14 +3193,21 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                           userSelect: 'none'
                         }}>⋮⋮</span>
                         <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: '#22c55e',
+                          color: '#0a0a0a',
                           fontSize: '9px',
-                          color: '#22c55e',
                           fontWeight: 600,
+                          padding: '1px 5px',
+                          borderRadius: '3px',
+                          flexShrink: 0,
                           fontFamily: 'monospace',
-                          opacity: 0.7,
-                          marginTop: '2px'
+                          lineHeight: 1,
+                          height: '16px'
                         }}>
-                          {node.id}
+                          #{node.id}
                         </span>
                         <div style={{
                           fontSize: '12px',

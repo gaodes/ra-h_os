@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type DragEvent } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 
 interface TerminalInputProps {
@@ -34,6 +34,7 @@ export default function TerminalInput({
   const [prompts, setPrompts] = useState<Array<{ id: string; name: string; content: string }>>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -151,7 +152,90 @@ export default function TerminalInput({
 
   const amplitudeBars = Array.from({ length: 8 });
 
-  
+  // Handle node drag over chat input
+  const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
+    // Check if it's a node being dragged (either custom MIME or text/plain fallback)
+    if (e.dataTransfer.types.includes('application/x-rah-node') ||
+        e.dataTransfer.types.includes('application/node-info') ||
+        e.dataTransfer.types.includes('text/plain')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLTextAreaElement>) => {
+    // Only reset if actually leaving the textarea (not entering a child)
+    if (e.currentTarget === e.target) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e: DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    // Try application/x-rah-node first (structured data with id + title)
+    let nodeData = e.dataTransfer.getData('application/x-rah-node');
+    if (nodeData) {
+      try {
+        const { id, title } = JSON.parse(nodeData);
+        const token = `[NODE:${id}:"${title}"]`;
+        insertAtCursor(token);
+        return;
+      } catch (err) {
+        console.error('Failed to parse x-rah-node data:', err);
+      }
+    }
+
+    // Fallback: try application/node-info (from NodesPanel)
+    nodeData = e.dataTransfer.getData('application/node-info');
+    if (nodeData) {
+      try {
+        const { id, title } = JSON.parse(nodeData);
+        const token = `[NODE:${id}:"${title || 'Untitled'}"]`;
+        insertAtCursor(token);
+        return;
+      } catch (err) {
+        console.error('Failed to parse node-info data:', err);
+      }
+    }
+
+    // Last resort: use text/plain (might already be formatted as [NODE:id:"title"])
+    const plainText = e.dataTransfer.getData('text/plain');
+    if (plainText && plainText.startsWith('[NODE:')) {
+      insertAtCursor(plainText);
+    }
+  };
+
+  const insertAtCursor = (text: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setInput(prev => prev + text + ' ');
+      return;
+    }
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const before = input.slice(0, start);
+    const after = input.slice(end);
+
+    // Add space before if there's text and it doesn't end with space
+    const needsSpaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n');
+    // Add space after
+    const newText = (needsSpaceBefore ? ' ' : '') + text + ' ';
+
+    setInput(before + newText + after);
+
+    // Set cursor position after the inserted text
+    setTimeout(() => {
+      const newPos = start + newText.length;
+      textarea.setSelectionRange(newPos, newPos);
+      textarea.focus();
+    }, 0);
+  };
+
+
   return (
     <>
     <style>{`
@@ -247,14 +331,17 @@ export default function TerminalInput({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
             disabled={isProcessing || disabledExternally}
             placeholder={placeholder || `ask ra-h...`}
             rows={rows}
             style={{
               flex: 1,
-              background: 'transparent',
-              border: 'none',
-              borderRadius: '0',
+              background: isDragOver ? 'rgba(34, 197, 94, 0.08)' : 'transparent',
+              border: isDragOver ? '1px dashed #22c55e' : 'none',
+              borderRadius: isDragOver ? '4px' : '0',
               color: '#e5e5e5',
               fontSize: '16px',
               fontFamily: 'inherit',
