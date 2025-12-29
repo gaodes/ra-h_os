@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 
 interface ToolGroup {
   id: string;
   name: string;
   description: string;
-  icon: string;
-  color: string;
 }
 
 export default function ToolsViewer() {
@@ -16,92 +14,89 @@ export default function ToolsViewer() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadTools = async () => {
+    const load = async () => {
       try {
-        const response = await fetch('/api/tools');
-        const result = await response.json();
+        const res = await fetch('/api/tools');
+        const result = await res.json();
         if (result.success) {
           setGroups(result.data.groups);
           setGroupedTools(result.data.tools);
         }
-      } catch (error) {
-        console.error('Failed to load tools:', error);
+      } catch (e) {
+        console.error('Failed to load tools:', e);
       } finally {
         setLoading(false);
       }
     };
-
-    loadTools();
+    load();
   }, []);
 
   if (loading) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#888' }}>
-        Loading tools...
-      </div>
-    );
+    return <div style={loadingStyle}>Loading...</div>;
   }
 
   return (
-    <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px' }}>
-          Read-only view of all tools available in the system, grouped by function.
-        </p>
+    <div style={containerStyle}>
+      <p style={descStyle}>Available tools grouped by function.</p>
 
-        {Object.entries(groups).map(([groupId, group]) => {
-          const tools = groupedTools[groupId] || [];
-          if (tools.length === 0) return null;
+      {Object.entries(groups).map(([groupId, group]) => {
+        const tools = groupedTools[groupId] || [];
+        if (tools.length === 0) return null;
 
-          return (
-            <div key={groupId} style={{ marginBottom: '32px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '16px',
-                  paddingBottom: '8px',
-                  borderBottom: `2px solid ${group.color}`,
-                }}
-              >
-                <span style={{ color: group.color, fontSize: '16px' }}>{group.icon}</span>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#fff' }}>
-                  {group.name}
-                </h3>
-                <span style={{ fontSize: '13px', color: '#666', marginLeft: '8px' }}>
-                  ({tools.length} tools)
-                </span>
-              </div>
-
-              <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px', fontStyle: 'italic' }}>
-                {group.description}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {tools.map((tool) => (
-                  <div
-                    key={tool.name}
-                    style={{
-                      padding: '12px 16px',
-                      background: '#1a1a1a',
-                      border: '1px solid #2a2a2a',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    <div style={{ fontFamily: 'monospace', fontSize: '13px', color: '#3b82f6', marginBottom: '6px' }}>
-                      {tool.name}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#aaa', lineHeight: '1.5' }}>
-                      {tool.description}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        return (
+          <div key={groupId} style={{ marginBottom: 24 }}>
+            <div style={groupHeaderStyle}>
+              <span style={groupTitleStyle}>{group.name}</span>
+              <span style={countStyle}>{tools.length}</span>
             </div>
-          );
-        })}
-      </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {tools.map((tool) => (
+                <div key={tool.name} style={toolStyle}>
+                  <div style={toolNameStyle}>{tool.name}</div>
+                  <div style={toolDescStyle}>{tool.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
+
+const containerStyle: CSSProperties = { padding: 24, height: '100%', overflow: 'auto' };
+const loadingStyle: CSSProperties = { padding: 24, color: '#6b7280' };
+const descStyle: CSSProperties = { fontSize: 13, color: '#6b7280', marginBottom: 20 };
+
+const groupHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 10,
+  paddingBottom: 8,
+  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+};
+
+const groupTitleStyle: CSSProperties = { fontSize: 13, fontWeight: 500, color: '#e5e7eb' };
+const countStyle: CSSProperties = { fontSize: 11, color: '#6b7280' };
+
+const toolStyle: CSSProperties = {
+  padding: '10px 14px',
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 6,
+};
+
+const toolNameStyle: CSSProperties = {
+  fontSize: 12,
+  fontFamily: 'monospace',
+  color: '#22c55e',
+  marginBottom: 4,
+};
+
+const toolDescStyle: CSSProperties = {
+  fontSize: 12,
+  color: '#9ca3af',
+  lineHeight: 1.4,
+};

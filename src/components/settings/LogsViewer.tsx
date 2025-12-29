@@ -127,86 +127,82 @@ export default function LogsViewer() {
       <div
         style={{
           padding: '16px 24px',
-          borderBottom: '1px solid #2a2a2a',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
           display: 'flex',
           flexDirection: 'column',
           gap: '12px',
         }}
       >
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#888', gap: '4px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#6b7280', gap: '4px' }}>
             Thread ID
             <input
               value={inputThreadId}
               onChange={(e) => setInputThreadId(e.target.value)}
-              placeholder="ra-h-node-4326-session_..."
+              placeholder="ra-h-node-..."
               style={{
-                background: '#0f0f0f',
-                border: '1px solid #2a2a2a',
-                color: '#ddd',
-                padding: '6px 10px',
-                borderRadius: '4px',
-                fontFamily: 'JetBrains Mono, monospace',
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#e5e7eb',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                fontFamily: 'monospace',
                 fontSize: '12px',
-                minWidth: '240px',
+                minWidth: '200px',
+                outline: 'none',
               }}
             />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#888', gap: '4px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#6b7280', gap: '4px' }}>
             Trace ID
             <input
               value={inputTraceId}
               onChange={(e) => setInputTraceId(e.target.value)}
-              placeholder="trace uuid"
+              placeholder="uuid"
               style={{
-                background: '#0f0f0f',
-                border: '1px solid #2a2a2a',
-                color: '#ddd',
-                padding: '6px 10px',
-                borderRadius: '4px',
-                fontFamily: 'JetBrains Mono, monospace',
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#e5e7eb',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                fontFamily: 'monospace',
                 fontSize: '12px',
-                minWidth: '200px',
+                minWidth: '160px',
+                outline: 'none',
               }}
             />
           </label>
-          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#888', gap: '4px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', fontSize: '11px', color: '#6b7280', gap: '4px' }}>
             Table
             <input
               value={inputTable}
               onChange={(e) => setInputTable(e.target.value)}
-              placeholder="nodes | edges | chats"
+              placeholder="nodes | edges"
               style={{
-                background: '#0f0f0f',
-                border: '1px solid #2a2a2a',
-                color: '#ddd',
-                padding: '6px 10px',
-                borderRadius: '4px',
-                fontFamily: 'JetBrains Mono, monospace',
+                background: 'rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#e5e7eb',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                fontFamily: 'monospace',
                 fontSize: '12px',
-                minWidth: '160px',
+                minWidth: '120px',
+                outline: 'none',
               }}
             />
           </label>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
             <button
               onClick={handleApplyFilters}
               style={{
-                padding: '8px 16px',
-                background: '#22c55e33',
-                border: '1px solid #22c55e66',
-                borderRadius: '4px',
-                color: '#22c55e',
+                padding: '8px 14px',
+                background: '#22c55e',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#052e16',
                 cursor: 'pointer',
                 fontSize: '12px',
-                fontFamily: 'JetBrains Mono, monospace',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#22c55e55';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#22c55e33';
+                fontWeight: 500,
               }}
             >
               Apply
@@ -214,14 +210,13 @@ export default function LogsViewer() {
             <button
               onClick={handleClearFilters}
               style={{
-                padding: '8px 16px',
-                background: '#1a1a1a',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                color: '#ccc',
+                padding: '8px 14px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#9ca3af',
                 cursor: 'pointer',
                 fontSize: '12px',
-                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
               Clear
@@ -229,20 +224,20 @@ export default function LogsViewer() {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: '12px', color: '#666' }}>{filterStatus}</div>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>{filterStatus}</div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handlePrevious}
               disabled={isFirstPage || filtersActive}
               style={{
-                padding: '8px 16px',
-                background: isFirstPage || filtersActive ? '#1a1a1a' : '#2a2a2a',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                color: isFirstPage || filtersActive ? '#555' : '#ccc',
+                padding: '8px 14px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: 'none',
+                borderRadius: '6px',
+                color: isFirstPage || filtersActive ? '#4b5563' : '#9ca3af',
                 cursor: isFirstPage || filtersActive ? 'not-allowed' : 'pointer',
                 fontSize: '12px',
-                fontFamily: 'JetBrains Mono, monospace',
+                opacity: isFirstPage || filtersActive ? 0.5 : 1,
               }}
             >
               Previous
@@ -251,14 +246,14 @@ export default function LogsViewer() {
               onClick={handleNext}
               disabled={isLastPage || filtersActive}
               style={{
-                padding: '8px 16px',
-                background: isLastPage || filtersActive ? '#1a1a1a' : '#2a2a2a',
-                border: '1px solid #333',
-                borderRadius: '4px',
-                color: isLastPage || filtersActive ? '#555' : '#ccc',
+                padding: '8px 14px',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: 'none',
+                borderRadius: '6px',
+                color: isLastPage || filtersActive ? '#4b5563' : '#9ca3af',
                 cursor: isLastPage || filtersActive ? 'not-allowed' : 'pointer',
                 fontSize: '12px',
-                fontFamily: 'JetBrains Mono, monospace',
+                opacity: isLastPage || filtersActive ? 0.5 : 1,
               }}
             >
               Next
@@ -269,25 +264,25 @@ export default function LogsViewer() {
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead style={{ position: 'sticky', top: 0, background: '#1a1a1a', zIndex: 1 }}>
+          <thead style={{ position: 'sticky', top: 0, background: 'rgba(10, 10, 10, 0.95)', zIndex: 1 }}>
             <tr>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a', width: '60px' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)', width: '60px' }}>
                 ID
               </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a', width: '180px' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)', width: '160px' }}>
                 Timestamp
               </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a', width: '100px' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)', width: '80px' }}>
                 Table
               </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a', width: '80px' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)', width: '70px' }}>
                 Action
               </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
                 Summary
               </th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'normal', borderBottom: '1px solid #2a2a2a', width: '80px' }}>
-                Row ID
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500, borderBottom: '1px solid rgba(255, 255, 255, 0.06)', width: '70px' }}>
+                Row
               </th>
             </tr>
           </thead>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 
 interface WorkflowDefinition {
   id: number;
@@ -20,149 +20,116 @@ export default function WorkflowsViewer() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadWorkflows = async () => {
+    const load = async () => {
       try {
-        const response = await fetch('/api/workflows');
-        const result = await response.json();
-        if (result.success) {
-          setWorkflows(result.data);
-        }
-      } catch (error) {
-        console.error('Failed to load workflows:', error);
+        const res = await fetch('/api/workflows');
+        const result = await res.json();
+        if (result.success) setWorkflows(result.data);
+      } catch (e) {
+        console.error('Failed to load workflows:', e);
       } finally {
         setLoading(false);
       }
     };
-    loadWorkflows();
+    load();
   }, []);
 
   if (loading) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', color: '#888' }}>
-        Loading workflows...
-      </div>
-    );
+    return <div style={loadingStyle}>Loading...</div>;
   }
 
   return (
-    <div style={{ padding: '24px', overflowY: 'auto', height: '100%' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px' }}>
-          Read-only view of all predefined workflows. Click to expand instructions.
-        </p>
+    <div style={containerStyle}>
+      <p style={descStyle}>Available workflows. Click to view instructions.</p>
 
-        {workflows.length === 0 && (
-          <div style={{ color: '#666', fontSize: '14px', textAlign: 'center', padding: '32px' }}>
-            No workflows defined yet.
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {workflows.map((workflow) => {
-            const isExpanded = expandedId === workflow.id;
-            
+      {workflows.length === 0 ? (
+        <div style={emptyStyle}>No workflows defined.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {workflows.map((w) => {
+            const expanded = expandedId === w.id;
             return (
-              <div
-                key={workflow.id}
-                style={{
-                  background: '#1a1a1a',
-                  border: '1px solid #2a2a2a',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Header */}
+              <div key={w.id} style={cardStyle}>
                 <div
-                  onClick={() => setExpandedId(isExpanded ? null : workflow.id)}
-                  style={{
-                    padding: '16px 20px',
-                    cursor: 'pointer',
-                    borderBottom: isExpanded ? '1px solid #2a2a2a' : 'none',
-                  }}
+                  onClick={() => setExpandedId(expanded ? null : w.id)}
+                  style={cardHeaderStyle}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#fff' }}>
-                        {workflow.displayName}
-                      </h3>
-                      <span style={{ fontFamily: 'monospace', fontSize: '12px', color: '#666' }}>
-                        {workflow.key}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      {workflow.enabled ? (
-                        <span style={{ fontSize: '12px', color: '#10b981', padding: '4px 8px', background: '#10b98120', borderRadius: '4px' }}>
-                          Enabled
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '12px', color: '#ef4444', padding: '4px 8px', background: '#ef444420', borderRadius: '4px' }}>
-                          Disabled
-                        </span>
-                      )}
-                      <span style={{ fontSize: '18px', color: '#666', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                        ▼
-                      </span>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={titleStyle}>{w.displayName}</span>
+                    <span style={keyStyle}>{w.key}</span>
                   </div>
-
-                  <div style={{ fontSize: '14px', color: '#aaa', marginBottom: '12px' }}>
-                    {workflow.description}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: '12px' }}>
-                      <span style={{ color: '#666' }}>Requires Node:</span>{' '}
-                      <span style={{ color: workflow.requiresFocusedNode ? '#f59e0b' : '#666' }}>
-                        {workflow.requiresFocusedNode ? 'Yes' : 'No'}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: '12px' }}>
-                      <span style={{ color: '#666' }}>Primary Actor:</span>{' '}
-                      <span style={{ color: '#8b5cf6' }}>
-                        {workflow.primaryActor === 'oracle' ? 'Wise RA-H (GPT-5)' : 'Main RA-H'}
-                      </span>
-                    </div>
-                    {workflow.expectedOutcome && (
-                      <div style={{ fontSize: '12px', flex: '1 1 100%' }}>
-                        <span style={{ color: '#666' }}>Expected Outcome:</span>{' '}
-                        <span style={{ color: '#aaa' }}>
-                          {workflow.expectedOutcome}
-                        </span>
-                      </div>
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{
+                      fontSize: 11,
+                      color: w.enabled ? '#22c55e' : '#6b7280',
+                    }}>
+                      {w.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <span style={{
+                      fontSize: 12,
+                      color: '#6b7280',
+                      transform: expanded ? 'rotate(180deg)' : 'rotate(0)',
+                      transition: 'transform 0.15s',
+                    }}>
+                      ▼
+                    </span>
                   </div>
                 </div>
-
-                {/* Expanded Instructions */}
-                {isExpanded && (
-                  <div style={{ padding: '20px', background: '#0f0f0f' }}>
-                    <div style={{ marginBottom: '12px', fontSize: '13px', fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Workflow Instructions
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'monospace',
-                        fontSize: '12px',
-                        color: '#ddd',
-                        whiteSpace: 'pre-wrap',
-                        lineHeight: '1.6',
-                        padding: '16px',
-                        background: '#1a1a1a',
-                        border: '1px solid #2a2a2a',
-                        borderRadius: '6px',
-                        maxHeight: '400px',
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {workflow.instructions}
-                    </div>
+                <div style={descRowStyle}>{w.description}</div>
+                {expanded && (
+                  <div style={expandedStyle}>
+                    <div style={instructionsStyle}>{w.instructions}</div>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
+const containerStyle: CSSProperties = { padding: 24, height: '100%', overflow: 'auto' };
+const loadingStyle: CSSProperties = { padding: 24, color: '#6b7280' };
+const descStyle: CSSProperties = { fontSize: 13, color: '#6b7280', marginBottom: 20 };
+const emptyStyle: CSSProperties = { fontSize: 13, color: '#6b7280', textAlign: 'center', padding: 32 };
+
+const cardStyle: CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 8,
+  overflow: 'hidden',
+};
+
+const cardHeaderStyle: CSSProperties = {
+  padding: '14px 16px',
+  cursor: 'pointer',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
+const titleStyle: CSSProperties = { fontSize: 13, fontWeight: 500, color: '#e5e7eb' };
+const keyStyle: CSSProperties = { fontSize: 11, fontFamily: 'monospace', color: '#6b7280' };
+const descRowStyle: CSSProperties = { fontSize: 12, color: '#9ca3af', padding: '0 16px 14px', lineHeight: 1.5 };
+
+const expandedStyle: CSSProperties = {
+  padding: 16,
+  borderTop: '1px solid rgba(255, 255, 255, 0.04)',
+  background: 'rgba(0, 0, 0, 0.2)',
+};
+
+const instructionsStyle: CSSProperties = {
+  fontSize: 12,
+  fontFamily: 'monospace',
+  color: '#d1d5db',
+  whiteSpace: 'pre-wrap',
+  lineHeight: 1.6,
+  padding: 12,
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 6,
+  maxHeight: 300,
+  overflow: 'auto',
+};

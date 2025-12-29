@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Folder, Map as MapIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Edge, Node } from '@/types/database';
 
 interface GraphNode extends Node {
@@ -9,23 +8,14 @@ interface GraphNode extends Node {
   x: number;
   y: number;
   radius: number;
-  tier: number;
 }
 
-interface PopularDimension {
-  dimension: string;
-  count: number;
-  isPriority: boolean;
+interface LockedDimension {
+  name: string;
 }
 
-interface TransformState {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-const LIMIT = 400;
-const PRIMARY_NODE_LIMIT = 150;
+const NODE_LIMIT = 200;
+const LABEL_THRESHOLD = 15; // Top N nodes get labels
 
 export default function MapViewer() {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -35,9 +25,10 @@ export default function MapViewer() {
   const [lockedDimensions, setLockedDimensions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [transform, setTransform] = useState<TransformState>({ x: 0, y: 0, scale: 1 });
-  const [hoverNode, setHoverNode] = useState<Node | null>(null);
+  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
 
+  // Resize observer
   useEffect(() => {
     const observer = new ResizeObserver(entries => {
       const entry = entries[0];
@@ -56,19 +47,20 @@ export default function MapViewer() {
     return () => observer.disconnect();
   }, []);
 
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [nodesRes, edgesRes, dimensionsRes] = await Promise.all([
-          fetch(`/api/nodes?limit=${LIMIT}&sortBy=edges`),
+        const [nodesRes, edgesRes, dimsRes] = await Promise.all([
+          fetch(`/api/nodes?limit=${NODE_LIMIT}&sortBy=edges`),
           fetch('/api/edges'),
-          fetch('/api/dimensions/popular'),
+          fetch('/api/dimensions'),
         ]);
 
         if (!nodesRes.ok || !edgesRes.ok) {
-          throw new Error('Failed to load knowledge graph data');
+          throw new Error('Failed to load data');
         }
 
         const nodesPayload = await nodesRes.json();
@@ -77,11 +69,14 @@ export default function MapViewer() {
         setNodes(nodesPayload.data || []);
         setEdges(edgesPayload.data || []);
 
-        if (dimensionsRes.ok) {
-          const dimPayload = await dimensionsRes.json();
-          if (dimPayload.success) {
-            const priority: PopularDimension[] = dimPayload.data;
-            setLockedDimensions(new Set(priority.filter(d => d.isPriority).map(d => d.dimension)));
+        // Get locked dimensions
+        if (dimsRes.ok) {
+          const dimsPayload = await dimsRes.json();
+          if (dimsPayload.success && dimsPayload.data) {
+            const locked = (dimsPayload.data as LockedDimension[])
+              .filter((d: LockedDimension & { is_locked?: boolean }) => d.is_locked)
+              .map((d: LockedDimension) => d.name);
+            setLockedDimensions(new Set(locked));
           }
         }
       } catch (err) {
@@ -94,97 +89,86 @@ export default function MapViewer() {
     fetchData();
   }, []);
 
-  const sortedNodes = useMemo(() => {
-    return [...nodes].sort((a, b) => {
-      const aLocked = a.dimensions?.some(dim => lockedDimensions.has(dim));
-      const bLocked = b.dimensions?.some(dim => lockedDimensions.has(dim));
-      if (aLocked !== bLocked) {
-        return aLocked ? -1 : 1;
-      }
-      return (b.edge_count ?? 0) - (a.edge_count ?? 0);
-    });
-  }, [nodes, lockedDimensions]);
-
-  const contextHubIds = useMemo(() => {
-    return new Set(sortedNodes.slice(0, 10).map(node => node.id));
-  }, [sortedNodes]);
-
+  // Position nodes in a cluster layout
   const graphNodes = useMemo<GraphNode[]>(() => {
-    if (sortedNodes.length === 0) return [];
+    if (nodes.length === 0) return [];
+
     const { width, height } = containerSize;
     const centerX = width / 2;
     const centerY = height / 2;
-    const primaryNodes = sortedNodes.slice(0, PRIMARY_NODE_LIMIT);
-    const secondaryNodes = sortedNodes.slice(PRIMARY_NODE_LIMIT);
 
-    const jitter = (index: number, span: number) => ((index % span) / span) * 40 - 20;
+    // Sort by edge count (highest first)
+    const sorted = [...nodes].sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0));
 
-    const positionedPrimary = primaryNodes.map((node, index) => {
-      const isContextHub = contextHubIds.has(node.id);
-      const isLocked = node.dimensions?.some(dim => lockedDimensions.has(dim));
-      const tier = isContextHub ? 0 : isLocked ? 1 : 2;
-      const baseRadius = [60, 200, 340][tier];
-      const radius = baseRadius + Math.min(node.edge_count || 0, 80);
-      const angle = ((index % 80) / 80) * Math.PI * 2;
-      const x = centerX + Math.cos(angle) * radius + jitter(index, 5);
-      const y = centerY + Math.sin(angle) * radius * 0.7 + jitter(index, 7);
-      const size = tier === 0 ? 16 : tier === 1 ? 12 : 8;
-      const radiusScaled = size + Math.log((node.edge_count || 1) + 1) * (tier === 2 ? 1.5 : 2.5);
+    // Find max edge count for scaling
+    const maxEdges = Math.max(...sorted.map(n => n.edge_count ?? 0), 1);
+
+    // Position nodes using a spiral/cluster approach
+    // High-edge nodes get placed more centrally with more space
+    return sorted.map((node, index) => {
+      const edgeCount = node.edge_count ?? 0;
+      const edgeRatio = edgeCount / maxEdges;
+
+      // Radius from center - higher edge count = closer to center
+      // Use golden angle for nice distribution
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const angle = index * goldenAngle;
+
+      // Distance from center inversely proportional to edge count
+      // Top nodes cluster in center, others spread out
+      // Extra spacing for labeled nodes (top 15) to prevent label overlap
+      const isLabeled = index < LABEL_THRESHOLD;
+      const labelSpacing = isLabeled ? 60 : 0;
+      const baseDistance = 80 + labelSpacing + (1 - edgeRatio) * Math.min(width, height) * 0.35;
+      const distance = baseDistance + (index * 4); // More spread between nodes
+
+      const x = centerX + Math.cos(angle) * distance;
+      const y = centerY + Math.sin(angle) * distance;
+
+      // Node size based on edge count
+      // Min 3px for tiny dots, max ~20px for top nodes
+      const minRadius = 3;
+      const maxRadius = 18;
+      const radius = minRadius + edgeRatio * (maxRadius - minRadius);
+
       return {
         ...node,
         x,
         y,
-        radius: radiusScaled,
-        tier,
+        radius,
       };
     });
+  }, [nodes, containerSize]);
 
-    const positionedSecondary = secondaryNodes.map((node, index) => {
-      const angle = (index / secondaryNodes.length) * Math.PI * 2;
-      const outerRadius = Math.max(width, height) * 0.55;
-      return {
-        ...node,
-        x: centerX + Math.cos(angle) * outerRadius,
-        y: centerY + Math.sin(angle) * outerRadius,
-        radius: 2,
-        tier: 3,
-      };
-    });
-
-    return [...positionedPrimary, ...positionedSecondary];
-  }, [sortedNodes, lockedDimensions, containerSize]);
-
+  // Get edges between visible nodes
   const graphEdges = useMemo(() => {
     if (graphNodes.length === 0 || edges.length === 0) return [];
+
     const nodeMap = new Map<number, GraphNode>();
     graphNodes.forEach(node => nodeMap.set(node.id, node));
 
-    const weightedEdges = edges
+    return edges
       .map(edge => {
         const source = nodeMap.get(edge.from_node_id);
         const target = nodeMap.get(edge.to_node_id);
         if (!source || !target) return null;
-        const weight = (source.edge_count || 0) + (target.edge_count || 0);
-        return { id: edge.id, source, target, weight };
+        return { id: edge.id, source, target };
       })
-      .filter(Boolean) as Array<{ id: number; source: GraphNode; target: GraphNode; weight: number }>;
-
-    return weightedEdges
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 800);
+      .filter(Boolean) as Array<{ id: number; source: GraphNode; target: GraphNode }>;
   }, [edges, graphNodes]);
 
-  const handleZoom = (direction: 'in' | 'out' | 'reset') => {
-    if (direction === 'reset') {
-      setTransform({ x: 0, y: 0, scale: 1 });
-      return;
-    }
-    setTransform(prev => ({
-      ...prev,
-      scale: direction === 'in' ? Math.min(prev.scale + 0.2, 2.5) : Math.max(prev.scale - 0.2, 0.6),
-    }));
-  };
+  // Get connected node IDs for selected node
+  const connectedNodeIds = useMemo(() => {
+    if (!selectedNode) return new Set<number>();
+    const connected = new Set<number>();
+    edges.forEach(edge => {
+      if (edge.from_node_id === selectedNode.id) connected.add(edge.to_node_id);
+      if (edge.to_node_id === selectedNode.id) connected.add(edge.from_node_id);
+    });
+    return connected;
+  }, [selectedNode, edges]);
 
+  // Pan handling
   const handlePanStart = (event: React.PointerEvent<SVGRectElement>) => {
     const startX = event.clientX;
     const startY = event.clientY;
@@ -208,139 +192,96 @@ export default function MapViewer() {
     window.addEventListener('pointerup', handleUp);
   };
 
+  const handleZoom = (direction: 'in' | 'out' | 'reset') => {
+    if (direction === 'reset') {
+      setTransform({ x: 0, y: 0, scale: 1 });
+      return;
+    }
+    setTransform(prev => ({
+      ...prev,
+      scale: direction === 'in'
+        ? Math.min(prev.scale + 0.2, 3)
+        : Math.max(prev.scale - 0.2, 0.5),
+    }));
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
-        Generating map...
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+        Loading map...
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>
-        Error: {error}
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+        {error}
       </div>
     );
   }
 
   if (graphNodes.length === 0) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
-        Not enough nodes to render a map yet
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+        No nodes to display
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', height: '100%', background: '#050505' }}>
-      {/* Controls */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          display: 'flex',
-          gap: '8px',
-          zIndex: 2,
-        }}
-      >
-        <button
-          onClick={() => handleZoom('in')}
-          style={controlButtonStyle}
-          title="Zoom in"
-        >
-          +
-        </button>
-        <button
-          onClick={() => handleZoom('out')}
-          style={controlButtonStyle}
-          title="Zoom out"
-        >
-          −
-        </button>
-        <button
-          onClick={() => handleZoom('reset')}
-          style={controlButtonStyle}
-          title="Reset view"
-        >
-          ⟳
-        </button>
+    <div ref={containerRef} style={{ position: 'relative', height: '100%', background: '#080808' }}>
+      {/* Zoom controls */}
+      <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 10 }}>
+        <button onClick={() => handleZoom('in')} style={controlBtn} title="Zoom in">+</button>
+        <button onClick={() => handleZoom('out')} style={controlBtn} title="Zoom out">−</button>
+        <button onClick={() => handleZoom('reset')} style={controlBtn} title="Reset">⟳</button>
       </div>
 
-      {/* Legend */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          background: 'rgba(8,8,8,0.9)',
-          border: '1px solid #1f1f1f',
-          borderRadius: '8px',
-          padding: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-          fontSize: '12px',
-          color: '#bbb',
-          zIndex: 2,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <MapIcon size={14} /> Legend
-        </div>
-        <LegendRow color="#fcd34d" label="Auto-context hub" />
-        <LegendRow color="#7de8a5" label="Locked dimension" icon={<Folder size={12} color="#7de8a5" />} />
-        <LegendRow color="#cbd5f5" label="Regular node" />
-        <div style={{ fontSize: '11px', color: '#666' }}>Node size increases with edge count</div>
-      </div>
-
-      {/* Hover tooltip */}
-      {hoverNode && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            right: 16,
-            maxWidth: '260px',
-            background: 'rgba(10,10,10,0.95)',
-            border: '1px solid #1f1f1f',
-            borderRadius: '8px',
-            padding: '12px',
-            fontSize: '12px',
-            color: '#eee',
-            zIndex: 2,
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>{hoverNode.title || 'Untitled node'}</div>
-          <div style={{ fontSize: '11px', color: '#666', marginBottom: '6px' }}>ID: {hoverNode.id}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span>Edges: {hoverNode.edge_count ?? 0}</span>
-            <span>Auto-context hub: {contextHubIds.has(hoverNode.id) ? 'Yes' : 'No'}</span>
-            <span style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {(hoverNode.dimensions || []).slice(0, 3).map(dimension => (
+      {/* Selected node info */}
+      {selectedNode && (
+        <div style={infoPanel}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              {selectedNode.title || 'Untitled'}
+            </div>
+            <button
+              onClick={() => setSelectedNode(null)}
+              style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 16 }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+            {connectedNodeIds.size} connected nodes · {selectedNode.edge_count ?? 0} total edges
+          </div>
+          <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 8 }}>
+            Click a highlighted node to explore
+          </div>
+          {selectedNode.dimensions && selectedNode.dimensions.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {selectedNode.dimensions.slice(0, 5).map(dim => (
                 <span
-                  key={`${hoverNode.id}-${dimension}`}
+                  key={dim}
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '2px 6px',
-                    borderRadius: '999px',
-                    background: '#0f1a12',
-                    border: '1px solid #1f3425',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    fontSize: 11,
+                    background: lockedDimensions.has(dim) ? '#132018' : '#1a1a1a',
+                    color: lockedDimensions.has(dim) ? '#86efac' : '#888',
                   }}
                 >
-                  <Folder size={10} />
-                  {dimension}
+                  {dim}
                 </span>
               ))}
-            </span>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* SVG Graph */}
       <svg width="100%" height="100%" style={{ display: 'block' }}>
+        <defs />
         <rect
           width="100%"
           height="100%"
@@ -349,9 +290,11 @@ export default function MapViewer() {
           onPointerDown={handlePanStart}
         />
         <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>
+          {/* Edges */}
           {graphEdges.map(edge => {
-            const thickness = Math.min(3, 0.5 + edge.weight / 300);
-            const opacity = Math.min(0.7, 0.2 + edge.weight / 800);
+            const isConnected = selectedNode && (
+              edge.source.id === selectedNode.id || edge.target.id === selectedNode.id
+            );
             return (
               <line
                 key={edge.id}
@@ -359,97 +302,124 @@ export default function MapViewer() {
                 y1={edge.source.y}
                 x2={edge.target.x}
                 y2={edge.target.y}
-                stroke="#1f2933"
-                strokeWidth={thickness}
-                strokeOpacity={opacity}
+                stroke={isConnected ? '#22c55e' : '#374151'}
+                strokeWidth={isConnected ? 1.5 : 0.75}
+                strokeOpacity={selectedNode ? (isConnected ? 0.9 : 0.15) : 0.6}
               />
             );
           })}
-      {graphNodes.map(node => {
-        const isContextHub = contextHubIds.has(node.id);
-        const isLocked = node.dimensions?.some(dim => lockedDimensions.has(dim));
-        const fill = isContextHub ? '#fcd34d' : isLocked ? '#7de8a5' : node.tier === 3 ? '#334155' : '#cbd5f5';
-        const stroke = isContextHub ? '#fbbf24' : isLocked ? '#4ade80' : node.tier === 3 ? '#1e293b' : '#94a3b8';
-        const showLabel = node.tier < 3 && transform.scale > 0.8;
-        return (
-          <g
-            key={node.id}
-            onMouseEnter={() => setHoverNode(node)}
-            onMouseLeave={() => setHoverNode(null)}
-            onClick={() => {
-              if (node.tier === 3) return;
-              setTransform(prev => {
-                const nextScale = Math.min(2.5, Math.max(prev.scale, 1.4));
-                return {
-                  scale: nextScale,
-                  x: containerSize.width / 2 - node.x * nextScale,
-                  y: containerSize.height / 2 - node.y * nextScale,
-                };
-              });
-            }}
-            style={{ cursor: node.tier < 3 ? 'pointer' : 'default' }}
-          >
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r={node.radius}
-              fill={fill}
-              fillOpacity={node.tier === 3 ? 0.4 : isContextHub ? 0.95 : 0.75}
-              stroke={stroke}
-              strokeWidth={node.tier === 3 ? 0.5 : isContextHub ? 2.5 : 1.5}
-              opacity={node.tier === 3 ? 0.6 : 0.95}
-            />
-            {showLabel && (
-              <text
-                x={node.x}
-                y={node.y + node.radius + 12}
-                textAnchor="middle"
-                fill="#94a3b8"
-                fontSize={10}
-                fontWeight={500}
+
+          {/* Nodes */}
+          {graphNodes.map((node, index) => {
+            const isTop = index < LABEL_THRESHOLD;
+            const isSelected = selectedNode?.id === node.id;
+            const isConnectedToSelected = connectedNodeIds.has(node.id);
+            const isDimmed = selectedNode && !isSelected && !isConnectedToSelected;
+
+            return (
+              <g
+                key={node.id}
+                onClick={() => setSelectedNode(isSelected ? null : node)}
+                style={{ cursor: 'pointer' }}
+                opacity={isDimmed ? 0.25 : 1}
               >
-                {(node.title || 'Untitled').slice(0, 24)}
-              </text>
-            )}
-          </g>
-        );
-      })}
+                {/* Highlight ring for connected nodes */}
+                {isConnectedToSelected && !isSelected && (
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={node.radius + 4}
+                    fill="none"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    strokeOpacity={0.6}
+                  />
+                )}
+                {/* Node circle */}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={node.radius}
+                  fill={isTop ? '#22c55e' : '#334155'}
+                  fillOpacity={isTop ? 0.6 : 0.4}
+                  stroke={isSelected ? '#fff' : isTop ? '#166534' : '#1e293b'}
+                  strokeWidth={isSelected ? 2 : isTop ? 1.5 : 0.5}
+                />
+
+                {/* Label for top nodes */}
+                {isTop && (
+                  <>
+                    {/* Title */}
+                    <text
+                      x={node.x}
+                      y={node.y + node.radius + 14}
+                      textAnchor="middle"
+                      fill="#e5e7eb"
+                      fontSize={11}
+                      fontWeight={500}
+                    >
+                      {(node.title || 'Untitled').slice(0, 20)}
+                      {(node.title?.length ?? 0) > 20 ? '…' : ''}
+                    </text>
+
+                    {/* Top dimensions (max 3) */}
+                    {node.dimensions && node.dimensions.length > 0 && (() => {
+                      const dims = node.dimensions.slice(0, 3).map(d => d.length > 10 ? d.slice(0, 9) + '…' : d).join('  ·  ');
+                      const labelWidth = dims.length * 5 + 16;
+                      return (
+                        <g>
+                          <rect
+                            x={node.x - labelWidth / 2}
+                            y={node.y + node.radius + 18}
+                            width={labelWidth}
+                            height={16}
+                            rx={8}
+                            fill="#141414"
+                            stroke="#262626"
+                            strokeWidth={0.5}
+                          />
+                          <text
+                            x={node.x}
+                            y={node.y + node.radius + 29}
+                            textAnchor="middle"
+                            fill="#a1a1aa"
+                            fontSize={9}
+                          >
+                            {dims}
+                          </text>
+                        </g>
+                      );
+                    })()}
+                  </>
+                )}
+              </g>
+            );
+          })}
         </g>
       </svg>
     </div>
   );
 }
 
-function LegendRow({ color, label, icon }: { color: string; label: string; icon?: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <span
-        style={{
-          width: '12px',
-          height: '12px',
-          borderRadius: '999px',
-          background: color,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#000',
-          fontSize: '9px',
-        }}
-      >
-        {icon}
-      </span>
-      {label}
-    </div>
-  );
-}
-
-const controlButtonStyle: CSSProperties = {
-  width: '32px',
-  height: '32px',
-  borderRadius: '999px',
-  border: '1px solid #1f1f1f',
-  background: 'rgba(8,8,8,0.85)',
-  color: '#eee',
-  fontSize: '16px',
+const controlBtn: CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 6,
+  border: '1px solid #262626',
+  background: '#141414',
+  color: '#888',
+  fontSize: 16,
   cursor: 'pointer',
+};
+
+const infoPanel: CSSProperties = {
+  position: 'absolute',
+  bottom: 16,
+  left: 16,
+  width: 260,
+  background: '#0a0a0a',
+  border: '1px solid #1f1f1f',
+  borderRadius: 8,
+  padding: 14,
+  zIndex: 10,
 };

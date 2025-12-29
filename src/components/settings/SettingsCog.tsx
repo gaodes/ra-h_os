@@ -17,8 +17,8 @@ export default function SettingsCog({ onClick }: SettingsCogProps) {
         width: '40px',
         height: '40px',
         background: '#1a1a1a',
-        border: 'none', /* Remove border for cleaner look */
-        borderRadius: '50%', /* Make it circular like an avatar */
+        border: '2px solid #22c55e',
+        borderRadius: '50%',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',

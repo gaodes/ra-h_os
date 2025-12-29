@@ -1,19 +1,15 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { apiKeyService, ApiKeyStatus } from '@/services/storage/apiKeys';
 
 export default function ApiKeysViewer() {
   const [openaiKey, setOpenaiKey] = useState('');
   const [anthropicKey, setAnthropicKey] = useState('');
-  const [status, setStatus] = useState<ApiKeyStatus>({
-    openai: 'not-set',
-    anthropic: 'not-set'
-  });
+  const [status, setStatus] = useState<ApiKeyStatus>({ openai: 'not-set', anthropic: 'not-set' });
   const [showKeys, setShowKeys] = useState(false);
 
   useEffect(() => {
-    // Load existing keys and status
     const stored = apiKeyService.getStoredKeys();
     setOpenaiKey(stored.openai || '');
     setAnthropicKey(stored.anthropic || '');
@@ -22,52 +18,18 @@ export default function ApiKeysViewer() {
 
   const handleSaveOpenAi = async () => {
     if (!openaiKey.trim()) return;
-    
-    try {
-      apiKeyService.setOpenAiKey(openaiKey.trim());
-      // Test the connection
-      const isConnected = await apiKeyService.testOpenAiConnection();
-      setStatus(prev => ({ ...prev, openai: isConnected ? 'connected' : 'failed' }));
-      
-      if (isConnected) {
-        alert('OpenAI API key saved and connection verified!');
-      } else {
-        alert('OpenAI API key saved but connection failed. Please check your key.');
-      }
-    } catch (error) {
-      alert(`Failed to save OpenAI key: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    apiKeyService.setOpenAiKey(openaiKey.trim());
+    setStatus(prev => ({ ...prev, openai: 'testing' }));
+    const ok = await apiKeyService.testOpenAiConnection();
+    setStatus(prev => ({ ...prev, openai: ok ? 'connected' : 'failed' }));
   };
 
   const handleSaveAnthropic = async () => {
     if (!anthropicKey.trim()) return;
-    
-    try {
-      apiKeyService.setAnthropicKey(anthropicKey.trim());
-      // Test the connection
-      const isConnected = await apiKeyService.testAnthropicConnection();
-      setStatus(prev => ({ ...prev, anthropic: isConnected ? 'connected' : 'failed' }));
-      
-      if (isConnected) {
-        alert('Anthropic API key saved and connection verified!');
-      } else {
-        alert('Anthropic API key saved but connection failed. Please check your key.');
-      }
-    } catch (error) {
-      alert(`Failed to save Anthropic key: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  const handleTestOpenAi = async () => {
-    setStatus(prev => ({ ...prev, openai: 'testing' }));
-    const isConnected = await apiKeyService.testOpenAiConnection();
-    setStatus(prev => ({ ...prev, openai: isConnected ? 'connected' : 'failed' }));
-  };
-
-  const handleTestAnthropic = async () => {
+    apiKeyService.setAnthropicKey(anthropicKey.trim());
     setStatus(prev => ({ ...prev, anthropic: 'testing' }));
-    const isConnected = await apiKeyService.testAnthropicConnection();
-    setStatus(prev => ({ ...prev, anthropic: isConnected ? 'connected' : 'failed' }));
+    const ok = await apiKeyService.testAnthropicConnection();
+    setStatus(prev => ({ ...prev, anthropic: ok ? 'connected' : 'failed' }));
   };
 
   const handleClearOpenAi = () => {
@@ -82,269 +44,203 @@ export default function ApiKeysViewer() {
     setStatus(prev => ({ ...prev, anthropic: 'not-set' }));
   };
 
-  const getStatusIcon = (statusValue: string) => {
-    switch (statusValue) {
-      case 'connected': return '✅';
-      case 'failed': return '❌';
-      case 'testing': return '⏳';
-      default: return '⚪';
-    }
-  };
-
-  const getStatusColor = (statusValue: string) => {
-    switch (statusValue) {
-      case 'connected': return '#22c55e';
-      case 'failed': return '#ef4444';
-      case 'testing': return '#f59e0b';
-      default: return '#6b7280';
-    }
+  const getStatusLabel = (s: string) => {
+    if (s === 'connected') return { text: 'Connected', color: '#22c55e' };
+    if (s === 'failed') return { text: 'Failed', color: '#ef4444' };
+    if (s === 'testing') return { text: 'Testing...', color: '#6b7280' };
+    return { text: 'Not set', color: '#6b7280' };
   };
 
   return (
-    <div style={{ 
-      padding: '24px', 
-      height: '100%', 
-      overflow: 'auto',
-      background: '#0f0f0f',
-      color: '#fff'
-    }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600' }}>
-          API Configuration
-        </h3>
-        <p style={{ margin: 0, fontSize: '14px', color: '#888', lineHeight: '1.5' }}>
-          Keys are stored locally and never shared with RA-H servers.
-        </p>
-      </div>
+    <div style={containerStyle}>
+      <p style={descStyle}>Keys are stored locally and never shared.</p>
 
-      {/* Show/Hide Keys Toggle */}
-      <div style={{ marginBottom: '24px' }}>
-        <label style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          fontSize: '14px', 
-          cursor: 'pointer',
-          color: '#888'
-        }}>
-          <input
-            type="checkbox"
-            checked={showKeys}
-            onChange={(e) => setShowKeys(e.target.checked)}
-            style={{ marginRight: '8px' }}
-          />
-          Show API keys in plain text
-        </label>
-      </div>
+      <label style={toggleStyle}>
+        <input
+          type="checkbox"
+          checked={showKeys}
+          onChange={(e) => setShowKeys(e.target.checked)}
+          style={{ marginRight: 8 }}
+        />
+        Show keys
+      </label>
 
-      {/* OpenAI Section */}
-      <div style={{ 
-        marginBottom: '32px', 
-        padding: '20px', 
-        border: '1px solid #2a2a2a', 
-        borderRadius: '8px',
-        background: '#0a0a0a'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          marginBottom: '16px' 
-        }}>
-          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>
-            OpenAI API Key
-          </h4>
-          <div style={{ 
-            marginLeft: '12px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            fontSize: '12px',
-            color: getStatusColor(status.openai)
-          }}>
-            <span style={{ marginRight: '4px' }}>
-              {getStatusIcon(status.openai)}
-            </span>
-            <span>
-              {status.openai === 'connected' && 'Connected'}
-              {status.openai === 'failed' && 'Connection Failed'}
-              {status.openai === 'testing' && 'Testing...'}
-              {status.openai === 'not-set' && 'Not Set'}
-            </span>
-          </div>
+      {/* OpenAI */}
+      <div style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <span style={cardTitleStyle}>OpenAI</span>
+          <span style={{ fontSize: 12, color: getStatusLabel(status.openai).color }}>
+            {getStatusLabel(status.openai).text}
+          </span>
         </div>
-        
-        <div style={{ marginBottom: '12px' }}>
-          <input
-            type={showKeys ? 'text' : 'password'}
-            value={openaiKey}
-            onChange={(e) => setOpenaiKey(e.target.value)}
-            placeholder="sk-proj-... or sk-..."
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '14px',
-              background: '#1a1a1a',
-              border: '1px solid #333',
-              borderRadius: '6px',
-              color: '#fff',
-              fontFamily: 'monospace'
-            }}
-          />
-        </div>
-        
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <input
+          type={showKeys ? 'text' : 'password'}
+          value={openaiKey}
+          onChange={(e) => setOpenaiKey(e.target.value)}
+          placeholder="sk-..."
+          style={inputStyle}
+        />
+        <div style={buttonRowStyle}>
           <button
             onClick={handleSaveOpenAi}
             disabled={!openaiKey.trim()}
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              background: '#22c55e',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: openaiKey.trim() ? 'pointer' : 'not-allowed',
-              opacity: openaiKey.trim() ? 1 : 0.5
-            }}
+            style={{ ...btnPrimaryStyle, opacity: openaiKey.trim() ? 1 : 0.4 }}
           >
-            Save & Test
+            Save
           </button>
-          
-          
           <button
             onClick={handleClearOpenAi}
             disabled={!openaiKey}
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              background: '#ef4444',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: openaiKey ? 'pointer' : 'not-allowed',
-              opacity: openaiKey ? 1 : 0.5
-            }}
+            style={{ ...btnSecondaryStyle, opacity: openaiKey ? 1 : 0.4 }}
           >
             Clear
           </button>
         </div>
       </div>
 
-      {/* Anthropic Section */}
-      <div style={{ 
-        marginBottom: '32px', 
-        padding: '20px', 
-        border: '1px solid #2a2a2a', 
-        borderRadius: '8px',
-        background: '#0a0a0a'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          marginBottom: '16px' 
-        }}>
-          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600' }}>
-            Anthropic API Key
-          </h4>
-          <div style={{ 
-            marginLeft: '12px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            fontSize: '12px',
-            color: getStatusColor(status.anthropic)
-          }}>
-            <span style={{ marginRight: '4px' }}>
-              {getStatusIcon(status.anthropic)}
-            </span>
-            <span>
-              {status.anthropic === 'connected' && 'Connected'}
-              {status.anthropic === 'failed' && 'Connection Failed'}
-              {status.anthropic === 'testing' && 'Testing...'}
-              {status.anthropic === 'not-set' && 'Not Set'}
-            </span>
-          </div>
+      {/* Anthropic */}
+      <div style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <span style={cardTitleStyle}>Anthropic</span>
+          <span style={{ fontSize: 12, color: getStatusLabel(status.anthropic).color }}>
+            {getStatusLabel(status.anthropic).text}
+          </span>
         </div>
-        
-        <div style={{ marginBottom: '12px' }}>
-          <input
-            type={showKeys ? 'text' : 'password'}
-            value={anthropicKey}
-            onChange={(e) => setAnthropicKey(e.target.value)}
-            placeholder="sk-ant-api03-..."
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '14px',
-              background: '#1a1a1a',
-              border: '1px solid #333',
-              borderRadius: '6px',
-              color: '#fff',
-              fontFamily: 'monospace'
-            }}
-          />
-        </div>
-        
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <input
+          type={showKeys ? 'text' : 'password'}
+          value={anthropicKey}
+          onChange={(e) => setAnthropicKey(e.target.value)}
+          placeholder="sk-ant-..."
+          style={inputStyle}
+        />
+        <div style={buttonRowStyle}>
           <button
             onClick={handleSaveAnthropic}
             disabled={!anthropicKey.trim()}
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              background: '#22c55e',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: anthropicKey.trim() ? 'pointer' : 'not-allowed',
-              opacity: anthropicKey.trim() ? 1 : 0.5
-            }}
+            style={{ ...btnPrimaryStyle, opacity: anthropicKey.trim() ? 1 : 0.4 }}
           >
-            Save & Test
+            Save
           </button>
-          
-          
           <button
             onClick={handleClearAnthropic}
             disabled={!anthropicKey}
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              background: '#ef4444',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: anthropicKey ? 'pointer' : 'not-allowed',
-              opacity: anthropicKey ? 1 : 0.5
-            }}
+            style={{ ...btnSecondaryStyle, opacity: anthropicKey ? 1 : 0.4 }}
           >
             Clear
           </button>
         </div>
       </div>
 
-      {/* Help Section */}
-      <div style={{ 
-        padding: '16px', 
-        background: '#1a1a1a', 
-        border: '1px solid #333', 
-        borderRadius: '6px',
-        fontSize: '12px',
-        color: '#888',
-        lineHeight: '1.5'
-      }}>
-        <h5 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '13px' }}>
-          How to get API keys:
-        </h5>
-        <ul style={{ margin: 0, paddingLeft: '16px' }}>
-          <li style={{ marginBottom: '4px' }}>
-            <strong>OpenAI:</strong> Visit <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>platform.openai.com/api-keys</a>
-          </li>
-          <li>
-            <strong>Anthropic:</strong> Visit <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" style={{ color: '#22c55e' }}>console.anthropic.com/settings/keys</a>
-          </li>
-        </ul>
-        <p style={{ margin: '12px 0 0 0', fontSize: '11px' }}>
-          Your keys are stored locally and never sent to RA-H servers. They are only used to communicate directly with OpenAI and Anthropic APIs.
-        </p>
+      {/* Help */}
+      <div style={helpStyle}>
+        <div style={{ marginBottom: 8 }}>Get keys from:</div>
+        <div>
+          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={linkStyle}>
+            OpenAI →
+          </a>
+          <span style={{ margin: '0 12px', color: '#4b5563' }}>·</span>
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" style={linkStyle}>
+            Anthropic →
+          </a>
+        </div>
       </div>
     </div>
   );
 }
+
+const containerStyle: CSSProperties = {
+  padding: 24,
+  height: '100%',
+  overflow: 'auto',
+};
+
+const descStyle: CSSProperties = {
+  fontSize: 13,
+  color: '#6b7280',
+  marginBottom: 16,
+};
+
+const toggleStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  fontSize: 12,
+  color: '#6b7280',
+  cursor: 'pointer',
+  marginBottom: 20,
+};
+
+const cardStyle: CSSProperties = {
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 8,
+  padding: 16,
+  marginBottom: 12,
+};
+
+const cardHeaderStyle: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 12,
+};
+
+const cardTitleStyle: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  color: '#e5e7eb',
+};
+
+const inputStyle: CSSProperties = {
+  width: '100%',
+  padding: '10px 12px',
+  fontSize: 13,
+  fontFamily: 'monospace',
+  background: 'rgba(0, 0, 0, 0.3)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  borderRadius: 6,
+  color: '#e5e7eb',
+  marginBottom: 12,
+  outline: 'none',
+};
+
+const buttonRowStyle: CSSProperties = {
+  display: 'flex',
+  gap: 8,
+};
+
+const btnPrimaryStyle: CSSProperties = {
+  padding: '8px 14px',
+  fontSize: 12,
+  fontWeight: 500,
+  background: '#22c55e',
+  color: '#052e16',
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+
+const btnSecondaryStyle: CSSProperties = {
+  padding: '8px 14px',
+  fontSize: 12,
+  fontWeight: 500,
+  background: 'rgba(255, 255, 255, 0.06)',
+  color: '#9ca3af',
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
+};
+
+const helpStyle: CSSProperties = {
+  marginTop: 8,
+  padding: 16,
+  background: 'rgba(255, 255, 255, 0.02)',
+  border: '1px solid rgba(255, 255, 255, 0.06)',
+  borderRadius: 8,
+  fontSize: 12,
+  color: '#6b7280',
+};
+
+const linkStyle: CSSProperties = {
+  color: '#22c55e',
+  textDecoration: 'none',
+};
