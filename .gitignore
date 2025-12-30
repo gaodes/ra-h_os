@@ -49,8 +49,8 @@ pgdata/
 migration-report-*.json
 *.sql
 
-# Logs
-logs/
+# Logs (only root logs directory, not app/api/logs)
+/logs/
 *.log
 
 # OS files
