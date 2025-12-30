@@ -115,12 +115,10 @@ export default function ThreePanelLayout() {
   // Listen for settings:open events (from LocalKeyGate)
   useEffect(() => {
     const handleSettingsOpen = (e: CustomEvent<{ tab?: SettingsTab }>) => {
-      console.log('[ThreePanelLayout] settings:open event received', e.detail);
       setSettingsInitialTab(e.detail?.tab || 'apikeys');
       setShowSettings(true);
     };
     window.addEventListener('settings:open', handleSettingsOpen as EventListener);
-    console.log('[ThreePanelLayout] settings:open listener registered');
     return () => window.removeEventListener('settings:open', handleSettingsOpen as EventListener);
   }, []);
 
