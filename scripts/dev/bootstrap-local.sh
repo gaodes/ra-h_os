@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-ENV_TEMPLATE="${REPO_DIR}/.env.example.local"
+ENV_TEMPLATE="${REPO_DIR}/.env.example"
 TARGET_ENV="${REPO_DIR}/.env.local"
 SQLITE_SEED_SCRIPT="${REPO_DIR}/scripts/database/sqlite-ensure-app-schema.sh"
 
@@ -12,7 +12,7 @@ log() {
 }
 
 if [ ! -f "$ENV_TEMPLATE" ]; then
-  echo "Error: ${ENV_TEMPLATE} not found. Make sure .env.example.local exists." >&2
+  echo "Error: ${ENV_TEMPLATE} not found. Make sure .env.example exists." >&2
   exit 1
 fi
 

@@ -1,4 +1,4 @@
-const rawDeploymentMode = (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || 'cloud').toLowerCase();
+const rawDeploymentMode = (process.env.NEXT_PUBLIC_DEPLOYMENT_MODE || 'local').toLowerCase();
 const backendFlagEnabled = process.env.NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND === 'true';
 
 export type DeploymentMode = 'local' | 'cloud';

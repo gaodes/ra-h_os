@@ -503,7 +503,7 @@ export default function RAHChat({
               borderRadius: '6px',
               lineHeight: 1.4
             }}>
-              {quotaError?.message ?? 'Your monthly allowance has been used. Upgrade your plan to keep chatting with RA-H.'}
+              {quotaError?.message ?? 'Rate limit reached. Please wait a moment and try again.'}
             </div>
           )}
           <TerminalInput

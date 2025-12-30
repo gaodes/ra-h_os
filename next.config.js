@@ -12,8 +12,8 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   eslint: {
-    // Temporarily ignore lint during builds for beta packaging
-    // TODO: Fix remaining ~150 lint errors in follow-up PR
+    // Temporarily ignore lint during builds
+    // TODO: Fix remaining lint errors in follow-up PR
     ignoreDuringBuilds: true,
   },
 }

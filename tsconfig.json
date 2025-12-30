@@ -33,5 +33,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "dist", ".next", "apps/mac/src-tauri/target", "backups"]
+  "exclude": ["node_modules", "dist", ".next", "backups", "vitest.config.ts"]
 }

@@ -34,7 +34,7 @@ export default function ExternalAgentsPanel() {
         setError(null);
       } catch (err) {
         console.error('Failed to load MCP status', err);
-        setError('Unable to read local MCP status. Open the desktop app to bootstrap it.');
+        setError('MCP server not running. See docs/8_mcp.md for setup instructions.');
         setStatus(initialStatus);
       } finally {
         setLoading(false);
@@ -84,7 +84,7 @@ export default function ExternalAgentsPanel() {
           <div>
             <div style={{ fontSize: '14px', color: '#94a3b8' }}>Connector URL</div>
             <div style={{ fontSize: '18px', color: connectorUrl ? '#fff' : '#64748b', marginTop: '4px' }}>
-              {loading ? 'Loading…' : connectorUrl ?? 'Unavailable (start the RA-H desktop app)'}
+              {loading ? 'Loading…' : connectorUrl ?? 'Unavailable (MCP server not running)'}
             </div>
             {status.last_updated && (
               <div style={{ fontSize: '12px', color: '#475569', marginTop: '6px' }}>

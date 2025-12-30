@@ -112,6 +112,16 @@ export default function ThreePanelLayout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setNodesCollapsed, setChatCollapsed]);
 
+  // Listen for settings:open events (from LocalKeyGate)
+  useEffect(() => {
+    const handleSettingsOpen = (e: CustomEvent<{ tab?: SettingsTab }>) => {
+      setSettingsInitialTab(e.detail?.tab || 'apikeys');
+      setShowSettings(true);
+    };
+    window.addEventListener('settings:open', handleSettingsOpen as EventListener);
+    return () => window.removeEventListener('settings:open', handleSettingsOpen as EventListener);
+  }, []);
+
 
   // SSE connection for real-time updates
   useEffect(() => {
