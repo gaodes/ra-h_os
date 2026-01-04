@@ -18,7 +18,7 @@ WORKFLOW STEPS
    - Summarize the core insight in one sentence
 
 2. SEARCH THE DATABASE FOR CONNECTIONS
-   DO NOT reference pinned context yet. Search the ENTIRE database:
+   Search the ENTIRE database:
    
    a) Obvious structural connections:
       - If names mentioned → queryNodes to find existing nodes about those people
@@ -33,10 +33,10 @@ WORKFLOW STEPS
    - Aim for 3–8 strong connections, not 20 weak ones
    - Check existing edges with queryEdge to avoid duplicating connections
 
-3. CONTEXTUALIZE WITH PINNED NODES
-   NOW review the supplied PINNED CONTEXT:
+3. CONTEXTUALIZE WITH TOP NODES
+   Review the BACKGROUND CONTEXT (top nodes by edge count):
    - Why might this node matter given the user's focus areas?
-   - Does it advance any themes visible in pinned nodes?
+   - Does it advance any themes visible in their most connected nodes?
    - Keep this brief – 1–2 sentences maximum
 
 4. APPEND INTEGRATION ANALYSIS
@@ -52,7 +52,7 @@ WORKFLOW STEPS
    - [NODE:456:"Title"] — [why: ...]
    - [continue for 3–8 connections found in step 2]
    
-   **Relevance:** [1–2 sentences connecting to user's pinned context themes]
+   **Relevance:** [1–2 sentences connecting to user's top nodes/focus areas]
    
    CRITICAL: Send ONLY this new section. The tool will automatically append it to existing content.
    
@@ -62,7 +62,7 @@ WORKFLOW STEPS
    Reply with: Task / Actions / Result / Nodes / Follow-up (≤120 words)
 
 CRITICAL RULES
-- Search the FULL database, not just pinned nodes
+- Search the FULL database, not just top nodes
 - Use entities from step 1 to guide searches in step 2
 - Call updateNode EXACTLY ONCE - after success, move to step 5 immediately
 - Keep total tool calls ≤ 18 (be efficient)

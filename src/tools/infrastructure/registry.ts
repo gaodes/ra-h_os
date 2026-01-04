@@ -23,6 +23,7 @@ import { executeWorkflowTool } from '../orchestration/executeWorkflow';
 import { youtubeExtractTool } from '../other/youtubeExtract';
 import { websiteExtractTool } from '../other/websiteExtract';
 import { paperExtractTool } from '../other/paperExtract';
+import { logEvalToolCall } from '@/services/evals/evalsLogger';
 
 // Core tools available to all agents (read-only graph operations)
 const CORE_TOOLS: Record<string, any> = {
@@ -109,6 +110,7 @@ const PLANNER_TOOL_NAMES = [
   'think',
   'delegateToMiniRAH',
   'updateNode', // For workflow execution (integrate workflow needs direct write access)
+  'createEdge', // For Quick Link workflow
 ];
 
 /**
@@ -155,7 +157,7 @@ export function getHelperTools(availableToolNames: string[]): Record<string, any
   
   return availableToolNames.reduce((tools, name) => {
     if (TOOLS[name]) {
-      tools[name] = TOOLS[name];
+      tools[name] = wrapToolForEvalLogging(name, TOOLS[name]);
     } else {
       console.warn(`Tool '${name}' not found in registry`);
     }
@@ -192,15 +194,60 @@ export async function executeTool(toolId: string, params: any, context: any) {
     };
   }
   
+  const startedAt = Date.now();
   try {
-    return await tool.execute(params, context);
+    const result = await tool.execute(params, context);
+    logEvalToolCall({
+      toolName: toolId,
+      args: params,
+      result,
+      latencyMs: Date.now() - startedAt
+    });
+    return result;
   } catch (error) {
+    logEvalToolCall({
+      toolName: toolId,
+      args: params,
+      error,
+      latencyMs: Date.now() - startedAt
+    });
     return {
       success: false,
       error: error instanceof Error ? error.message : `Tool '${toolId}' execution failed`,
       data: null
     };
   }
+}
+
+function wrapToolForEvalLogging(toolName: string, tool: any) {
+  if (!tool || typeof tool.execute !== 'function') {
+    return tool;
+  }
+
+  return {
+    ...tool,
+    execute: async (params: any, context: any) => {
+      const startedAt = Date.now();
+      try {
+        const result = await tool.execute(params, context);
+        logEvalToolCall({
+          toolName,
+          args: params,
+          result,
+          latencyMs: Date.now() - startedAt
+        });
+        return result;
+      } catch (error) {
+        logEvalToolCall({
+          toolName,
+          args: params,
+          error,
+          latencyMs: Date.now() - startedAt
+        });
+        throw error;
+      }
+    }
+  };
 }
 
 // Export group utilities

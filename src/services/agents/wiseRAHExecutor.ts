@@ -163,20 +163,23 @@ export class WiseRAHExecutor {
       );
 
       // Enforce read-only constraint - remove write tools EXCEPT for workflows
-      // Workflows (like integrate) need updateNode for direct content updates
-      const writeToolsToRemove = isWorkflow 
-        ? ['createNode', 'createEdge', 'updateEdge', 'embedContent', 'youtubeExtract', 'websiteExtract', 'paperExtract', 'delegateToWiseRAH']
+      // Workflows need updateNode for content updates and createEdge for Quick Link workflow
+      const writeToolsToRemove = isWorkflow
+        ? ['createNode', 'updateEdge', 'embedContent', 'youtubeExtract', 'websiteExtract', 'paperExtract', 'delegateToWiseRAH']
         : ['createNode', 'updateNode', 'createEdge', 'updateEdge', 'embedContent', 'youtubeExtract', 'websiteExtract', 'paperExtract', 'delegateToWiseRAH'];
-      
+
       writeToolsToRemove.forEach(toolName => {
         if (toolName in wrappedTools) {
           console.warn(`WiseRAHExecutor: ${toolName} detected in planner toolset. Removing to enforce read-only constraint.`);
           delete wrappedTools[toolName];
         }
       });
-      
+
       if (isWorkflow && 'updateNode' in wrappedTools) {
         console.log('✅ [WiseRAHExecutor] updateNode preserved for workflow execution');
+      }
+      if (isWorkflow && 'createEdge' in wrappedTools) {
+        console.log('✅ [WiseRAHExecutor] createEdge preserved for workflow execution');
       }
       console.log('🔒 [WiseRAHExecutor] Final tools after read-only enforcement:', Object.keys(wrappedTools));
       
