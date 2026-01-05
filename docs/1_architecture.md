@@ -1,5 +1,11 @@
 # System Architecture
 
+> How RA-H's AI agents work together to manage your knowledge.
+
+**How it works:** RA-H has three AI agents: orchestrators (ra-h/ra-h-easy) handle your conversations and delegate work, wise-rah executes multi-step workflows, and mini-rah handles background tasks. All agents can read your knowledge graph; only some can write.
+
+---
+
 ## Overview
 
 RA-H uses a multi-agent architecture with three specialized AI agents that collaborate to manage your knowledge base. The system is built around **nodes** (knowledge items), **edges** (relationships), and **dimensions** (categories).
@@ -88,7 +94,7 @@ Users toggle via UI (⚡ Easy / 🔥 Hard). Choice persists in localStorage. **S
 
 **Orchestrator:**
 - Maintains full conversation history
-- Sees pinned nodes + focused node
+- Sees auto-context (top 10 connected nodes) + focused node
 - Delegates isolation ensures clean context
 
 **Workers (wise-rah/mini-rah):**
@@ -103,4 +109,4 @@ Users interact with a single interface that automatically routes requests to the
 - **Workflow triggers** (executeWorkflow → wise-rah)
 - **Delegation needs** (mini-rah spawned in background)
 
-All agents share the same **pinned context** (up to 10 nodes) plus the **focused node** for consistent knowledge access.
+Orchestrators see **auto-context** (your 10 most-connected nodes) plus the **focused node** for consistent knowledge access. See [Context & Memory](./3_context-and-memory.md) for details.
