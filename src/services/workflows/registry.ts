@@ -1,20 +1,68 @@
 import { INTEGRATE_WORKFLOW_INSTRUCTIONS } from '@/config/workflows/integrate';
+import { PREP_WORKFLOW_INSTRUCTIONS } from '@/config/workflows/prep';
+import { RESEARCH_WORKFLOW_INSTRUCTIONS } from '@/config/workflows/research';
+import { CONNECT_WORKFLOW_INSTRUCTIONS } from '@/config/workflows/connect';
+import { SURVEY_WORKFLOW_INSTRUCTIONS } from '@/config/workflows/survey';
 import type { WorkflowDefinition } from './types';
 import { listUserWorkflows, loadUserWorkflow } from './workflowFileService';
 
 // Bundled default workflows (always available as fallback)
 const BUNDLED_WORKFLOWS: Record<string, WorkflowDefinition> = {
-  'integrate': {
+  'prep': {
     id: 1,
+    key: 'prep',
+    displayName: 'Prep',
+    description: 'Quick summary to decide if content is worth deeper engagement',
+    instructions: PREP_WORKFLOW_INSTRUCTIONS,
+    enabled: true,
+    requiresFocusedNode: true,
+    primaryActor: 'oracle',
+    expectedOutcome: 'Brief section appended with what/gist/why it matters',
+  },
+  'research': {
+    id: 2,
+    key: 'research',
+    displayName: 'Research',
+    description: 'Background research on topic, person, or concept',
+    instructions: RESEARCH_WORKFLOW_INSTRUCTIONS,
+    enabled: true,
+    requiresFocusedNode: true,
+    primaryActor: 'oracle',
+    expectedOutcome: 'Research notes appended with background and key findings',
+  },
+  'connect': {
+    id: 3,
+    key: 'connect',
+    displayName: 'Connect',
+    description: 'Find and create edges to related nodes',
+    instructions: CONNECT_WORKFLOW_INSTRUCTIONS,
+    enabled: true,
+    requiresFocusedNode: true,
+    primaryActor: 'oracle',
+    expectedOutcome: '3-5 edges created to related nodes',
+  },
+  'integrate': {
+    id: 4,
     key: 'integrate',
     displayName: 'Integrate',
-    description: 'Deep analysis and connection-building for focused node',
+    description: 'Full analysis, connection discovery, and documentation',
     instructions: INTEGRATE_WORKFLOW_INSTRUCTIONS,
     enabled: true,
     requiresFocusedNode: true,
     primaryActor: 'oracle',
-    expectedOutcome: 'Focused node updated with insights; 3-5 high-value edges created',
-  }
+    expectedOutcome: 'Integration analysis appended; 3-5 edges created',
+  },
+  'survey': {
+    id: 5,
+    key: 'survey',
+    displayName: 'Survey',
+    description: 'Analyze dimension patterns, themes, and gaps',
+    instructions: SURVEY_WORKFLOW_INSTRUCTIONS,
+    enabled: true,
+    requiresFocusedNode: false, // Requires active dimension, not focused node
+    primaryActor: 'oracle',
+    expectedOutcome: 'Dimension description updated with survey findings',
+  },
 };
 
 // Set of bundled workflow keys (for UI to know which can be "reset to default")

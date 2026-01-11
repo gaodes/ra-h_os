@@ -26,6 +26,7 @@ interface SendParams {
   history: ChatMessage[];
   openTabs: any[];
   activeTabId: number | null;
+  activeDimension?: string | null;
   currentView?: 'nodes' | 'memory';
   sessionId: string;
   mode: 'easy' | 'hard';
@@ -36,7 +37,6 @@ interface UseSSEChatOptions {
   beforeRequest?: () => boolean;
   onRequestError?: (error: unknown, response?: Response) => boolean | void;
   onStreamComplete?: () => void | Promise<void>;
-  getApiKeys?: () => { openai?: string; anthropic?: string } | undefined;
 }
 
 export function useSSEChat(
@@ -44,7 +44,7 @@ export function useSSEChat(
   setMessages: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void,
   options: UseSSEChatOptions = {}
 ) {
-  const { getAuthToken, beforeRequest, onRequestError, onStreamComplete, getApiKeys } = options;
+  const { getAuthToken, beforeRequest, onRequestError, onStreamComplete } = options;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -53,7 +53,7 @@ export function useSSEChat(
     abortControllerRef.current?.abort();
   };
 
-  const send = async ({ text, history, openTabs, activeTabId, currentView, sessionId, mode }: SendParams) => {
+  const send = async ({ text, history, openTabs, activeTabId, activeDimension, currentView, sessionId, mode }: SendParams) => {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
     if (beforeRequest && !beforeRequest()) return;
@@ -97,10 +97,10 @@ export function useSSEChat(
             .map((m) => ({ role: m.role, parts: [{ type: 'text', text: m.content }] })),
           openTabs,
           activeTabId,
+          activeDimension,
           currentView,
           sessionId,
-          mode,
-          apiKeys: getApiKeys?.(),
+          mode
         }),
         signal: abortControllerRef.current.signal
       });

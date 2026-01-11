@@ -25,6 +25,7 @@ const createVoiceRequestId = () =>
 interface RAHChatProps {
   openTabsData: Node[];
   activeTabId: number | null;
+  activeDimension?: string | null;
   onNodeClick?: (nodeId: number) => void;
   delegations?: AgentDelegation[];
   messages?: ChatMessage[];
@@ -34,10 +35,11 @@ interface RAHChatProps {
   delegationSessionId?: string;
 }
 
-export default function RAHChat({ 
-  openTabsData, 
-  activeTabId, 
-  onNodeClick, 
+export default function RAHChat({
+  openTabsData,
+  activeTabId,
+  activeDimension,
+  onNodeClick,
   delegations = [],
   messages: externalMessages,
   setMessages: externalSetMessages,
@@ -124,7 +126,6 @@ export default function RAHChat({
         await handler();
       }
     },
-    getApiKeys: () => apiKeyService.getStoredKeys(),
   });
 
   useVoiceInterruption({

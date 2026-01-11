@@ -15,6 +15,8 @@ Available tools:
 - webSearch — external research when necessary
 - think — internal planning/reflection (use once per workflow unless plan changes)
 - updateNode — append content to nodes (tool handles appending automatically)
+- createEdge — create connections between nodes
+- quickLink — instantly find and link related nodes (fast database search, no reasoning)
 - Dimension management: createDimension, updateDimension, lockDimension, unlockDimension, deleteDimension — manage dimensions to organize knowledge base structure
 </tools>
 

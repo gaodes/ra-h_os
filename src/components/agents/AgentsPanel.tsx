@@ -11,14 +11,15 @@ import { Node } from '@/types/database';
 interface AgentsPanelProps {
   openTabsData: Node[];
   activeTabId: number | null;
+  activeDimension?: string | null;
   onNodeClick?: (nodeId: number) => void;
   onCollapse?: () => void;
 }
 
-type ActiveTab = 'ra-h' | string; // 'ra-h' or delegation sessionId
+type ActiveTab = 'ra-h' | 'workflows' | string; // 'ra-h', 'workflows', or delegation sessionId
 type Mode = 'quickadd' | 'session';
 
-export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, onCollapse }: AgentsPanelProps) {
+export default function AgentsPanel({ openTabsData, activeTabId, activeDimension, onNodeClick, onCollapse }: AgentsPanelProps) {
   const [delegationsMap, setDelegationsMap] = useState<Record<string, AgentDelegation>>({});
   const [activeAgentTab, setActiveAgentTab] = useState<ActiveTab>('ra-h');
   const [mode, setMode] = useState<Mode>('quickadd');
@@ -184,6 +185,7 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, on
   };
 
   const handleDelegationClick = (sessionId: string) => {
+    setMode('session');
     setActiveAgentTab(sessionId);
   };
 
@@ -419,76 +421,37 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, on
           onClick={() => setActiveAgentTab('ra-h')}
           className={`agent-tab ${activeAgentTab === 'ra-h' ? 'active' : ''}`}
         >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: rahMode === 'easy' ? '#22c55e' : '#f97316' }}>
-            {(rahMode === 'easy' ? <Zap size={12} strokeWidth={2.4} /> : <Flame size={12} strokeWidth={2.4} />)}
-            <span>RA-H · {rahMode === 'easy' ? 'Easy' : 'Hard'}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#22c55e' }}>
+            <Zap size={12} strokeWidth={2.4} />
+            <span>RA-H</span>
           </span>
         </button>
 
-        {/* Delegation Tabs */}
-        {orderedDelegations.map((delegation) => {
-          const isActive = activeAgentTab === delegation.sessionId;
-          const isWiseRAH = delegation.agentType === 'wise-rah';
-          
-          // Status colors based on agent type
-          const statusColor = isWiseRAH 
-            ? (delegation.status === 'in_progress' ? '#8b5cf6' : 
-               delegation.status === 'completed' ? '#6b6b6b' : 
-               delegation.status === 'failed' ? '#ff6b6b' : '#a78bfa')
-            : (delegation.status === 'in_progress' ? '#8bd450' : 
-               delegation.status === 'completed' ? '#6b6b6b' : 
-               delegation.status === 'failed' ? '#ff6b6b' : '#5c9aff');
-          
-          const shortId = delegation.sessionId.split('_').pop() || '';
-          const tabLabel = isWiseRAH 
-            ? `WISE RA-H · ${shortId.slice(0, 6)}`
-            : `MINI · ${shortId.slice(0, 6)}`;
-          
-          return (
-            <div
-              key={delegation.sessionId}
-              className={`agent-tab-wrapper ${isWiseRAH ? 'wise' : 'mini'} ${isActive ? 'active' : ''}`}
-            >
-              <button
-                onClick={() => setActiveAgentTab(delegation.sessionId)}
-                className="agent-tab"
-              >
-                <span className="status-dot" style={{ background: statusColor }} />
-                <span className="agent-tab-label">{tabLabel}</span>
-              </button>
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  console.log(`[AgentsPanel] User clicked close button for delegation ${delegation.sessionId}`);
-                  
-                  // Delete from database
-                  try {
-                    await fetch(`/api/rah/delegations/${delegation.sessionId}`, { method: 'DELETE' });
-                  } catch (error) {
-                    console.error(`Failed to delete delegation ${delegation.sessionId}:`, error);
-                  }
-                  
-                  // Remove from UI state
-                  setDelegationsMap((prev) => {
-                    const { [delegation.sessionId]: _ignored, ...rest } = prev;
-                    return rest;
-                  });
-                  setDelegationMessages((prev) => {
-                    const { [delegation.sessionId]: _ignored, ...rest } = prev;
-                    return rest;
-                  });
-                  if (activeAgentTab === delegation.sessionId) {
-                    setActiveAgentTab('ra-h');
-                  }
-                }}
-                className="agent-tab-close"
-                title="Close tab"
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
+        {/* Workflows Tab */}
+        {orderedDelegations.length > 0 && (
+          <button
+            onClick={() => setActiveAgentTab('workflows')}
+            className={`agent-tab ${activeAgentTab === 'workflows' || (activeAgentTab !== 'ra-h' && activeAgentTab !== 'workflows') ? 'active' : ''}`}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <span className="status-dot" style={{
+                background: orderedDelegations.some(d => d.status === 'in_progress') ? '#22c55e' : '#6b6b6b',
+                animation: orderedDelegations.some(d => d.status === 'in_progress') ? 'pulse 2s infinite' : 'none'
+              }} />
+              <span>Workflows</span>
+              <span style={{
+                background: '#1f1f1f',
+                color: '#a8a8a8',
+                fontSize: '10px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                fontWeight: 600
+              }}>
+                {orderedDelegations.length}
+              </span>
+            </span>
+          </button>
+        )}
         </div>
       )}
 
@@ -509,13 +472,14 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, on
         ) : (
           <>
             {/* Keep RAHChat always mounted, just hide when not active */}
-            <div style={{ 
-              height: '100%', 
-              display: activeAgentTab === 'ra-h' ? 'block' : 'none' 
+            <div style={{
+              height: '100%',
+              display: activeAgentTab === 'ra-h' ? 'block' : 'none'
             }}>
                 <RAHChat
                   openTabsData={openTabsData}
                   activeTabId={activeTabId}
+                  activeDimension={activeDimension}
                   onNodeClick={onNodeClick}
                   delegations={orderedDelegations}
                   messages={rahMessages}
@@ -523,21 +487,55 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, on
                   mode={rahMode}
                 />
             </div>
-            
-            {/* Show delegation chat when delegation tab is active */}
-            {selectedDelegation && activeAgentTab !== 'ra-h' && (
+
+            {/* Workflows list view */}
+            {activeAgentTab === 'workflows' && (
               <div style={{ height: '100%', display: 'block' }}>
-                <RAHChat
-                  openTabsData={openTabsData}
-                  activeTabId={activeTabId}
-                  onNodeClick={onNodeClick}
+                <WorkflowsListView
                   delegations={orderedDelegations}
-                  messages={getDelegationMessages(selectedDelegation.sessionId)}
-                  setMessages={setDelegationMessagesFor(selectedDelegation.sessionId)}
-                  mode="easy"
-                  delegationMode={true}
-                  delegationSessionId={selectedDelegation.sessionId}
+                  onSelectDelegation={(sessionId) => setActiveAgentTab(sessionId)}
+                  onDeleteDelegation={async (sessionId) => {
+                    try {
+                      await fetch(`/api/rah/delegations/${sessionId}`, { method: 'DELETE' });
+                    } catch (error) {
+                      console.error(`Failed to delete delegation ${sessionId}:`, error);
+                    }
+                    setDelegationsMap((prev) => {
+                      const { [sessionId]: _ignored, ...rest } = prev;
+                      return rest;
+                    });
+                    setDelegationMessages((prev) => {
+                      const { [sessionId]: _ignored, ...rest } = prev;
+                      return rest;
+                    });
+                  }}
                 />
+              </div>
+            )}
+
+            {/* Show delegation detail when a specific delegation is selected */}
+            {selectedDelegation && activeAgentTab !== 'ra-h' && activeAgentTab !== 'workflows' && (
+              <div style={{ height: '100%', display: 'block' }}>
+                {/* Show summary view if completed/failed with no messages */}
+                {(selectedDelegation.status === 'completed' || selectedDelegation.status === 'failed')
+                  && getDelegationMessages(selectedDelegation.sessionId).length === 0 ? (
+                  <DelegationSummaryView
+                    delegation={selectedDelegation}
+                    onBack={() => setActiveAgentTab('workflows')}
+                  />
+                ) : (
+                  <DelegationDetailView
+                    delegation={selectedDelegation}
+                    openTabsData={openTabsData}
+                    activeTabId={activeTabId}
+                    activeDimension={activeDimension}
+                    onNodeClick={onNodeClick}
+                    delegations={orderedDelegations}
+                    messages={getDelegationMessages(selectedDelegation.sessionId)}
+                    setMessages={setDelegationMessagesFor(selectedDelegation.sessionId)}
+                    onBack={() => setActiveAgentTab('workflows')}
+                  />
+                )}
               </div>
             )}
           </>
@@ -638,7 +636,468 @@ export default function AgentsPanel({ openTabsData, activeTabId, onNodeClick, on
           height: 8px;
           border-radius: 50%;
         }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
       `}</style>
+    </div>
+  );
+}
+
+// Summary view for completed delegations with no messages
+function DelegationSummaryView({ delegation, onBack }: { delegation: AgentDelegation; onBack?: () => void }) {
+  const isSuccess = delegation.status === 'completed';
+  const statusColor = isSuccess ? '#22c55e' : '#ff6b6b';
+  const statusLabel = isSuccess ? 'Completed' : 'Failed';
+
+  return (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#0a0a0a',
+      padding: '24px'
+    }}>
+      {/* Header with back button */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '24px',
+        paddingBottom: '16px',
+        borderBottom: '1px solid #1a1a1a'
+      }}>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#666',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '14px'
+            }}
+          >
+            ←
+          </button>
+        )}
+        <div style={{
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          background: statusColor
+        }} />
+        <span style={{
+          color: statusColor,
+          fontSize: '12px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em'
+        }}>
+          {statusLabel}
+        </span>
+        <span style={{
+          color: '#666',
+          fontSize: '11px',
+          marginLeft: 'auto'
+        }}>
+          {new Date(delegation.updatedAt).toLocaleString()}
+        </span>
+      </div>
+
+      {/* Task */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{
+          color: '#666',
+          fontSize: '10px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          marginBottom: '8px'
+        }}>
+          Task
+        </div>
+        <div style={{
+          color: '#e5e5e5',
+          fontSize: '13px',
+          lineHeight: '1.5'
+        }}>
+          {delegation.task}
+        </div>
+      </div>
+
+      {/* Summary */}
+      {delegation.summary && (
+        <div style={{ flex: 1 }}>
+          <div style={{
+            color: '#666',
+            fontSize: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            marginBottom: '8px'
+          }}>
+            Result
+          </div>
+          <div style={{
+            color: isSuccess ? '#a8a8a8' : '#fca5a5',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            whiteSpace: 'pre-wrap'
+          }}>
+            {delegation.summary}
+          </div>
+        </div>
+      )}
+
+      {/* No summary fallback */}
+      {!delegation.summary && (
+        <div style={{
+          color: '#666',
+          fontSize: '12px',
+          fontStyle: 'italic'
+        }}>
+          No details available
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Workflows list view - shows all delegations in a nice list
+function WorkflowsListView({
+  delegations,
+  onSelectDelegation,
+  onDeleteDelegation
+}: {
+  delegations: AgentDelegation[];
+  onSelectDelegation: (sessionId: string) => void;
+  onDeleteDelegation: (sessionId: string) => void;
+}) {
+  const activeDelegations = delegations.filter(d => d.status === 'queued' || d.status === 'in_progress');
+  const completedDelegations = delegations.filter(d => d.status === 'completed' || d.status === 'failed');
+
+  const getStatusInfo = (delegation: AgentDelegation) => {
+    const isWiseRAH = delegation.agentType === 'wise-rah';
+    let color = '#6b6b6b';
+    let label = 'Queued';
+
+    if (delegation.status === 'in_progress') {
+      color = isWiseRAH ? '#8b5cf6' : '#22c55e';
+      label = 'Running';
+    } else if (delegation.status === 'completed') {
+      color = '#22c55e';
+      label = 'Done';
+    } else if (delegation.status === 'failed') {
+      color = '#ff6b6b';
+      label = 'Failed';
+    }
+
+    return { color, label };
+  };
+
+  return (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#0a0a0a',
+      overflow: 'hidden'
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '16px 20px',
+        borderBottom: '1px solid #1a1a1a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <span style={{
+          color: '#e5e5e5',
+          fontSize: '13px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em'
+        }}>
+          Workflows
+        </span>
+        {activeDelegations.length > 0 && (
+          <span style={{
+            color: '#22c55e',
+            fontSize: '11px',
+            fontWeight: 500
+          }}>
+            {activeDelegations.length} running
+          </span>
+        )}
+      </div>
+
+      {/* List */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '12px'
+      }}>
+        {delegations.length === 0 ? (
+          <div style={{
+            color: '#666',
+            fontSize: '12px',
+            textAlign: 'center',
+            padding: '40px 20px'
+          }}>
+            No workflows yet. Use Quick Capture or ask RA-H to run a workflow.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Active workflows first */}
+            {activeDelegations.map((delegation) => {
+              const { color, label } = getStatusInfo(delegation);
+              return (
+                <WorkflowCard
+                  key={delegation.sessionId}
+                  delegation={delegation}
+                  statusColor={color}
+                  statusLabel={label}
+                  onSelect={() => onSelectDelegation(delegation.sessionId)}
+                  onDelete={() => onDeleteDelegation(delegation.sessionId)}
+                />
+              );
+            })}
+
+            {/* Divider if both active and completed exist */}
+            {activeDelegations.length > 0 && completedDelegations.length > 0 && (
+              <div style={{
+                height: '1px',
+                background: '#1f1f1f',
+                margin: '8px 0'
+              }} />
+            )}
+
+            {/* Completed workflows */}
+            {completedDelegations.map((delegation) => {
+              const { color, label } = getStatusInfo(delegation);
+              return (
+                <WorkflowCard
+                  key={delegation.sessionId}
+                  delegation={delegation}
+                  statusColor={color}
+                  statusLabel={label}
+                  onSelect={() => onSelectDelegation(delegation.sessionId)}
+                  onDelete={() => onDeleteDelegation(delegation.sessionId)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Individual workflow card
+function WorkflowCard({
+  delegation,
+  statusColor,
+  statusLabel,
+  onSelect,
+  onDelete
+}: {
+  delegation: AgentDelegation;
+  statusColor: string;
+  statusLabel: string;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const isActive = delegation.status === 'in_progress' || delegation.status === 'queued';
+
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        padding: '14px 16px',
+        background: '#151515',
+        border: '1px solid #1f1f1f',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+        position: 'relative'
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = '#1a1a1a';
+        e.currentTarget.style.borderColor = '#2a2a2a';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = '#151515';
+        e.currentTarget.style.borderColor = '#1f1f1f';
+      }}
+    >
+      {/* Top row: status + time + delete */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '8px'
+      }}>
+        <div style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: statusColor,
+          animation: isActive ? 'pulse 2s infinite' : 'none'
+        }} />
+        <span style={{
+          color: statusColor,
+          fontSize: '11px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
+        }}>
+          {statusLabel}
+        </span>
+        <span style={{
+          color: '#555',
+          fontSize: '11px',
+          marginLeft: 'auto'
+        }}>
+          {new Date(delegation.createdAt).toLocaleTimeString()}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#444',
+            cursor: 'pointer',
+            padding: '2px 6px',
+            fontSize: '14px',
+            lineHeight: 1
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#ff6b6b'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#444'}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Task description */}
+      <div style={{
+        color: '#e5e5e5',
+        fontSize: '12px',
+        lineHeight: '1.4',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical'
+      }}>
+        {delegation.task}
+      </div>
+
+      {/* Summary preview if completed */}
+      {delegation.summary && delegation.status === 'completed' && (
+        <div style={{
+          color: '#666',
+          fontSize: '11px',
+          marginTop: '8px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
+          {delegation.summary}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Delegation detail view with back button
+
+function DelegationDetailView({
+  delegation,
+  openTabsData,
+  activeTabId,
+  activeDimension,
+  onNodeClick,
+  delegations,
+  messages,
+  setMessages,
+  onBack
+}: {
+  delegation: AgentDelegation;
+  openTabsData: Node[];
+  activeTabId: number | null;
+  activeDimension?: string | null;
+  onNodeClick?: (nodeId: number) => void;
+  delegations: AgentDelegation[];
+  messages: any[];
+  setMessages: (updater: (prev: any[]) => any[]) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Back button header */}
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: '1px solid #1a1a1a',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: '#0a0a0a'
+      }}>
+        <button
+          onClick={onBack}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#666',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '12px'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#a8a8a8'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#666'}
+        >
+          ← Workflows
+        </button>
+        <span style={{
+          color: '#555',
+          fontSize: '11px'
+        }}>
+          |
+        </span>
+        <span style={{
+          color: delegation.status === 'in_progress' ? '#22c55e' : '#666',
+          fontSize: '11px',
+          textTransform: 'uppercase'
+        }}>
+          {delegation.status === 'in_progress' ? 'Running' : delegation.status}
+        </span>
+      </div>
+
+      {/* RAHChat for streaming */}
+      <div style={{ flex: 1 }}>
+        <RAHChat
+          openTabsData={openTabsData}
+          activeTabId={activeTabId}
+          activeDimension={activeDimension}
+          onNodeClick={onNodeClick}
+          delegations={delegations}
+          messages={messages}
+          setMessages={setMessages}
+          mode="easy"
+          delegationMode={true}
+          delegationSessionId={delegation.sessionId}
+        />
+      </div>
     </div>
   );
 }

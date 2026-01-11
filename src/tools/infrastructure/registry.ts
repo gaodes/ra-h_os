@@ -6,6 +6,7 @@ import { updateNodeTool } from '../database/updateNode';
 import { createEdgeTool } from '../database/createEdge';
 import { queryEdgeTool } from '../database/queryEdge';
 import { updateEdgeTool } from '../database/updateEdge';
+import { quickLinkTool } from '../database/quickLink';
 import { createDimensionTool } from '../database/createDimension';
 import { updateDimensionTool } from '../database/updateDimension';
 import { lockDimensionTool } from '../database/lockDimension';
@@ -13,6 +14,7 @@ import { unlockDimensionTool } from '../database/unlockDimension';
 import { deleteDimensionTool } from '../database/deleteDimension';
 import { queryDimensionsTool } from '../database/queryDimensions';
 import { getDimensionTool } from '../database/getDimension';
+import { queryDimensionNodesTool } from '../database/queryDimensionNodes';
 import { searchContentEmbeddingsTool } from '../other/searchContentEmbeddings';
 import { webSearchTool } from '../other/webSearch';
 import { thinkTool } from '../other/think';
@@ -20,6 +22,9 @@ import { delegateToMiniRAHTool } from '../orchestration/delegateToMiniRAH';
 import { delegateNodeQuotesTool, delegateNodeComparisonTool } from '../orchestration/delegationHelpers';
 import { delegateToWiseRAHTool } from '../orchestration/delegateToWiseRAH';
 import { executeWorkflowTool } from '../orchestration/executeWorkflow';
+import { listWorkflowsTool } from '../orchestration/listWorkflows';
+import { getWorkflowTool } from '../orchestration/getWorkflow';
+import { editWorkflowTool } from '../orchestration/editWorkflow';
 import { youtubeExtractTool } from '../other/youtubeExtract';
 import { websiteExtractTool } from '../other/websiteExtract';
 import { paperExtractTool } from '../other/paperExtract';
@@ -32,6 +37,7 @@ const CORE_TOOLS: Record<string, any> = {
   queryEdge: queryEdgeTool,
   queryDimensions: queryDimensionsTool,
   getDimension: getDimensionTool,
+  queryDimensionNodes: queryDimensionNodesTool,
   searchContentEmbeddings: searchContentEmbeddingsTool,
 };
 
@@ -43,6 +49,9 @@ const ORCHESTRATION_TOOLS: Record<string, any> = {
   delegateNodeComparison: delegateNodeComparisonTool,
   delegateToWiseRAH: delegateToWiseRAHTool,
   executeWorkflow: executeWorkflowTool,
+  listWorkflows: listWorkflowsTool,
+  getWorkflow: getWorkflowTool,
+  editWorkflow: editWorkflowTool,
 };
 
 // Execution tools for worker agents (includes write operations)
@@ -51,6 +60,7 @@ const EXECUTION_TOOLS: Record<string, any> = {
   updateNode: updateNodeTool,
   createEdge: createEdgeTool,
   updateEdge: updateEdgeTool,
+  quickLink: quickLinkTool,
   createDimension: createDimensionTool,
   updateDimension: updateDimensionTool,
   lockDimension: lockDimensionTool,
@@ -78,10 +88,14 @@ const ORCHESTRATOR_TOOL_NAMES = Array.from(new Set([
   'webSearch',
   'think',
   'executeWorkflow',
+  'listWorkflows',
+  'getWorkflow',
+  'editWorkflow',
   'createNode',
   'updateNode',
   'createEdge',
   'updateEdge',
+  'quickLink',
   'createDimension',
   'updateDimension',
   'lockDimension',
@@ -110,7 +124,9 @@ const PLANNER_TOOL_NAMES = [
   'think',
   'delegateToMiniRAH',
   'updateNode', // For workflow execution (integrate workflow needs direct write access)
-  'createEdge', // For Quick Link workflow
+  'createEdge', // For edge creation in workflows
+  'quickLink', // Fast edge creation via text search
+  'updateDimension', // For survey workflow (dimension analysis)
 ];
 
 /**

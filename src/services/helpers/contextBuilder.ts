@@ -8,6 +8,14 @@ import { buildAutoContextBlock } from '@/services/context/autoContext';
 export interface NodeContext {
   nodes: Node[];
   activeNodeId: number | null;
+  activeDimension?: string | null;
+}
+
+export interface DimensionContext {
+  name: string;
+  description: string | null;
+  isPriority: boolean;
+  nodeCount: number;
 }
 
 export interface ContextBuilderOptions {
@@ -152,6 +160,40 @@ export function buildFocusedNodesBlock(
 }
 
 /**
+ * Fetches dimension context from API or database
+ */
+async function fetchDimensionContext(dimensionName: string): Promise<DimensionContext | null> {
+  try {
+    // In server context, we can call the API internally or query directly
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/dimensions/${encodeURIComponent(dimensionName)}/context`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.success ? data.data : null;
+  } catch (error) {
+    console.warn('Failed to fetch dimension context:', error);
+    return null;
+  }
+}
+
+/**
+ * Builds the dimension context block for the system prompt
+ */
+function buildDimensionContextBlock(dimension: DimensionContext | null): string {
+  if (!dimension) return '';
+
+  return `
+=== ACTIVE DIMENSION ===
+Dimension: "${dimension.name}"
+Description: ${dimension.description || 'No description'}
+Node Count: ${dimension.nodeCount} nodes
+Priority: ${dimension.isPriority ? 'Yes (locked)' : 'No'}
+
+Note: Use queryDimensionNodes tool to retrieve actual nodes in this dimension.
+===================================
+`;
+}
+
+/**
  * Builds system prompt as cacheable blocks (Anthropic prompt caching)
  */
 export async function buildSystemPromptBlocks(
@@ -210,6 +252,15 @@ export async function buildSystemPromptBlocks(
       text: autoContextBlock,
       ...(cacheControl ? { cache_control: cacheControl } : {})
     });
+  }
+
+  // Add dimension context if an active dimension is provided
+  if (nodeContext.activeDimension) {
+    const dimensionContext = await fetchDimensionContext(nodeContext.activeDimension);
+    const dimensionBlock = buildDimensionContextBlock(dimensionContext);
+    if (dimensionBlock.trim().length > 0) {
+      blocks.push({ type: 'text', text: dimensionBlock });
+    }
   }
 
   const focusBlock = buildFocusedNodesBlock(nodeContext, options);

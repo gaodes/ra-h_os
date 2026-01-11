@@ -37,6 +37,9 @@ export const TOOL_GROUP_ASSIGNMENTS: Record<string, string> = {
   queryNodes: 'core',
   getNodesById: 'core',
   queryEdge: 'core',
+  queryDimensions: 'core',
+  getDimension: 'core',
+  queryDimensionNodes: 'core',
   searchContentEmbeddings: 'core',
 
   // Orchestration: Delegation and reasoning (orchestrator only)
@@ -47,12 +50,16 @@ export const TOOL_GROUP_ASSIGNMENTS: Record<string, string> = {
   delegateNodeComparison: 'orchestration',
   delegateToWiseRAH: 'orchestration',
   executeWorkflow: 'orchestration',
+  listWorkflows: 'orchestration',
+  getWorkflow: 'orchestration',
+  editWorkflow: 'orchestration',
 
   // Execution: Write operations and extraction (workers only)
   createNode: 'execution',
   updateNode: 'execution',
   createEdge: 'execution',
   updateEdge: 'execution',
+  quickLink: 'execution',
   embedContent: 'execution',
   youtubeExtract: 'execution',
   websiteExtract: 'execution',

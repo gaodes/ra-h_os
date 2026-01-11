@@ -67,6 +67,223 @@ const searchNodesOutputSchema = {
   )
 };
 
+// rah_update_node schemas
+const updateNodeInputSchema = {
+  id: z.number().int().positive().describe('The ID of the node to update'),
+  updates: z.object({
+    title: z.string().optional().describe('New title'),
+    content: z.string().optional().describe('Content to APPEND (not replace)'),
+    link: z.string().optional().describe('New link'),
+    dimensions: z.array(z.string()).optional().describe('New dimensions (replaces existing)'),
+    metadata: z.record(z.any()).optional().describe('New metadata (replaces existing)')
+  }).describe('Fields to update')
+};
+
+const updateNodeOutputSchema = {
+  success: z.boolean(),
+  nodeId: z.number(),
+  message: z.string()
+};
+
+// rah_get_nodes schemas
+const getNodesInputSchema = {
+  nodeIds: z.array(z.number().int().positive()).min(1).max(10).describe('List of node IDs to load')
+};
+
+const getNodesOutputSchema = {
+  count: z.number(),
+  nodes: z.array(
+    z.object({
+      id: z.number(),
+      title: z.string(),
+      content: z.string().nullable(),
+      link: z.string().nullable(),
+      dimensions: z.array(z.string()),
+      updated_at: z.string()
+    })
+  )
+};
+
+// rah_create_edge schemas
+const createEdgeInputSchema = {
+  sourceId: z.number().int().positive().describe('Source node ID'),
+  targetId: z.number().int().positive().describe('Target node ID'),
+  type: z.string().optional().describe('Edge type/label'),
+  weight: z.number().min(0).max(1).optional().describe('Edge weight 0-1')
+};
+
+const createEdgeOutputSchema = {
+  success: z.boolean(),
+  edgeId: z.number(),
+  message: z.string()
+};
+
+// rah_query_edges schemas
+const queryEdgesInputSchema = {
+  nodeId: z.number().int().positive().optional().describe('Find edges connected to this node'),
+  limit: z.number().min(1).max(50).optional().describe('Max edges to return')
+};
+
+const queryEdgesOutputSchema = {
+  count: z.number(),
+  edges: z.array(
+    z.object({
+      id: z.number(),
+      from_node_id: z.number(),
+      to_node_id: z.number(),
+      type: z.string().nullable(),
+      weight: z.number().nullable()
+    })
+  )
+};
+
+// rah_update_edge schemas
+const updateEdgeInputSchema = {
+  id: z.number().int().positive().describe('Edge ID to update'),
+  type: z.string().optional().describe('New edge type/label'),
+  weight: z.number().min(0).max(1).optional().describe('New edge weight 0-1')
+};
+
+const updateEdgeOutputSchema = {
+  success: z.boolean(),
+  message: z.string()
+};
+
+// rah_create_dimension schemas
+const createDimensionInputSchema = {
+  name: z.string().min(1).describe('Dimension name'),
+  description: z.string().max(500).optional().describe('Dimension description'),
+  isPriority: z.boolean().optional().describe('Lock dimension for auto-assignment')
+};
+
+const createDimensionOutputSchema = {
+  success: z.boolean(),
+  dimension: z.string(),
+  message: z.string()
+};
+
+// rah_update_dimension schemas
+const updateDimensionInputSchema = {
+  name: z.string().min(1).describe('Current dimension name'),
+  newName: z.string().optional().describe('New name (for renaming)'),
+  description: z.string().max(500).optional().describe('New description'),
+  isPriority: z.boolean().optional().describe('Lock/unlock dimension')
+};
+
+const updateDimensionOutputSchema = {
+  success: z.boolean(),
+  dimension: z.string(),
+  message: z.string()
+};
+
+// rah_delete_dimension schemas
+const deleteDimensionInputSchema = {
+  name: z.string().min(1).describe('Dimension name to delete')
+};
+
+const deleteDimensionOutputSchema = {
+  success: z.boolean(),
+  message: z.string()
+};
+
+// rah_search_embeddings schemas
+const searchEmbeddingsInputSchema = {
+  query: z.string().min(1).describe('Semantic search query'),
+  limit: z.number().min(1).max(20).optional().describe('Max results')
+};
+
+const searchEmbeddingsOutputSchema = {
+  count: z.number(),
+  results: z.array(
+    z.object({
+      nodeId: z.number(),
+      title: z.string(),
+      chunkPreview: z.string(),
+      similarity: z.number()
+    })
+  )
+};
+
+// rah_list_workflows schemas
+const listWorkflowsOutputSchema = {
+  count: z.number(),
+  workflows: z.array(
+    z.object({
+      key: z.string(),
+      displayName: z.string(),
+      description: z.string().nullable(),
+      enabled: z.boolean()
+    })
+  )
+};
+
+// rah_get_workflow schemas
+const getWorkflowInputSchema = {
+  workflowKey: z.string().describe('Workflow key to fetch (e.g., "integrate", "prep")')
+};
+
+const getWorkflowOutputSchema = {
+  success: z.boolean(),
+  workflow: z.object({
+    key: z.string(),
+    displayName: z.string(),
+    description: z.string().nullable(),
+    instructions: z.string(),
+    enabled: z.boolean()
+  }).nullable(),
+  message: z.string()
+};
+
+// rah_execute_workflow schemas
+const executeWorkflowInputSchema = {
+  workflowKey: z.string().describe('Workflow key to execute (e.g., "integrate")'),
+  nodeId: z.number().int().positive().optional().describe('Target node ID for the workflow')
+};
+
+const executeWorkflowOutputSchema = {
+  success: z.boolean(),
+  message: z.string()
+};
+
+// rah_extract_url schemas
+const extractUrlInputSchema = {
+  url: z.string().url().describe('URL of the webpage to extract content from')
+};
+
+const extractUrlOutputSchema = {
+  success: z.boolean(),
+  title: z.string(),
+  content: z.string(),
+  chunk: z.string(),
+  metadata: z.record(z.any())
+};
+
+// rah_extract_youtube schemas
+const extractYoutubeInputSchema = {
+  url: z.string().describe('YouTube video URL to extract transcript from')
+};
+
+const extractYoutubeOutputSchema = {
+  success: z.boolean(),
+  title: z.string(),
+  channel: z.string(),
+  transcript: z.string(),
+  metadata: z.record(z.any())
+};
+
+// rah_extract_pdf schemas
+const extractPdfInputSchema = {
+  url: z.string().url().describe('URL of the PDF file to extract content from')
+};
+
+const extractPdfOutputSchema = {
+  success: z.boolean(),
+  title: z.string(),
+  content: z.string(),
+  chunk: z.string(),
+  metadata: z.record(z.any())
+};
+
 const server = new McpServer(serverInfo, { instructions });
 
 function logError(...args) {
@@ -222,6 +439,480 @@ server.registerTool(
           dimensions: node.dimensions || [],
           updated_at: node.updated_at
         }))
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_update_node',
+  {
+    title: 'Update RA-H node',
+    description: 'Update an existing node. Content is APPENDED (not replaced). Dimensions are replaced.',
+    inputSchema: updateNodeInputSchema,
+    outputSchema: updateNodeOutputSchema
+  },
+  async ({ id, updates }) => {
+    if (!updates || Object.keys(updates).length === 0) {
+      throw new Error('At least one field must be provided in updates.');
+    }
+
+    const result = await callRaHApi(`/api/nodes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+
+    const node = result.node || result.data;
+    return {
+      content: [{ type: 'text', text: `Updated node #${id}` }],
+      structuredContent: {
+        success: true,
+        nodeId: node?.id || id,
+        message: result.message || `Updated node #${id}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_get_nodes',
+  {
+    title: 'Get RA-H nodes by ID',
+    description: 'Load full node records by their IDs.',
+    inputSchema: getNodesInputSchema,
+    outputSchema: getNodesOutputSchema
+  },
+  async ({ nodeIds }) => {
+    const uniqueIds = Array.from(new Set(nodeIds.filter(id => Number.isFinite(id) && id > 0)));
+    if (uniqueIds.length === 0) {
+      throw new Error('No valid node IDs provided.');
+    }
+
+    const nodes = [];
+    for (const id of uniqueIds) {
+      try {
+        const result = await callRaHApi(`/api/nodes/${id}`, { method: 'GET' });
+        if (result.node) {
+          nodes.push({
+            id: result.node.id,
+            title: result.node.title,
+            content: result.node.content ?? null,
+            link: result.node.link ?? null,
+            dimensions: result.node.dimensions || [],
+            updated_at: result.node.updated_at
+          });
+        }
+      } catch (e) {
+        // Skip missing nodes
+      }
+    }
+
+    return {
+      content: [{ type: 'text', text: `Loaded ${nodes.length} of ${uniqueIds.length} nodes.` }],
+      structuredContent: {
+        count: nodes.length,
+        nodes
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_create_edge',
+  {
+    title: 'Create RA-H edge',
+    description: 'Create a connection between two nodes.',
+    inputSchema: createEdgeInputSchema,
+    outputSchema: createEdgeOutputSchema
+  },
+  async ({ sourceId, targetId, type, weight }) => {
+    const payload = {
+      from_node_id: sourceId,
+      to_node_id: targetId,
+      type: type || 'related',
+      weight: weight ?? 0.5
+    };
+
+    const result = await callRaHApi('/api/edges', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    const edge = result.edge || result.data;
+    return {
+      content: [{ type: 'text', text: `Created edge from #${sourceId} to #${targetId}` }],
+      structuredContent: {
+        success: true,
+        edgeId: edge?.id || 0,
+        message: result.message || `Created edge from #${sourceId} to #${targetId}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_query_edges',
+  {
+    title: 'Query RA-H edges',
+    description: 'Find connections between nodes.',
+    inputSchema: queryEdgesInputSchema,
+    outputSchema: queryEdgesOutputSchema
+  },
+  async ({ nodeId, limit = 25 }) => {
+    const params = new URLSearchParams();
+    if (nodeId) params.set('nodeId', String(nodeId));
+    params.set('limit', String(Math.min(Math.max(limit, 1), 50)));
+
+    const result = await callRaHApi(`/api/edges?${params.toString()}`, {
+      method: 'GET'
+    });
+
+    const edges = Array.isArray(result.data) ? result.data : [];
+    return {
+      content: [{ type: 'text', text: `Found ${edges.length} edge(s).` }],
+      structuredContent: {
+        count: edges.length,
+        edges: edges.map(e => ({
+          id: e.id,
+          from_node_id: e.from_node_id,
+          to_node_id: e.to_node_id,
+          type: e.type ?? e.source ?? null,
+          weight: e.weight ?? null
+        }))
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_update_edge',
+  {
+    title: 'Update RA-H edge',
+    description: 'Update an existing edge connection.',
+    inputSchema: updateEdgeInputSchema,
+    outputSchema: updateEdgeOutputSchema
+  },
+  async ({ id, type, weight }) => {
+    const payload = {};
+    if (type !== undefined) payload.type = type;
+    if (weight !== undefined) payload.weight = weight;
+
+    if (Object.keys(payload).length === 0) {
+      throw new Error('At least one field (type or weight) must be provided.');
+    }
+
+    const result = await callRaHApi(`/api/edges/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    return {
+      content: [{ type: 'text', text: `Updated edge #${id}` }],
+      structuredContent: {
+        success: true,
+        message: result.message || `Updated edge #${id}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_create_dimension',
+  {
+    title: 'Create RA-H dimension',
+    description: 'Create a new dimension/tag for organizing nodes.',
+    inputSchema: createDimensionInputSchema,
+    outputSchema: createDimensionOutputSchema
+  },
+  async ({ name, description, isPriority }) => {
+    const payload = { name };
+    if (description) payload.description = description;
+    if (isPriority !== undefined) payload.isPriority = isPriority;
+
+    const result = await callRaHApi('/api/dimensions', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    const dim = result.data?.dimension || name;
+    return {
+      content: [{ type: 'text', text: `Created dimension: ${dim}` }],
+      structuredContent: {
+        success: true,
+        dimension: dim,
+        message: `Created dimension: ${dim}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_update_dimension',
+  {
+    title: 'Update RA-H dimension',
+    description: 'Update dimension properties (rename, description, lock/unlock).',
+    inputSchema: updateDimensionInputSchema,
+    outputSchema: updateDimensionOutputSchema
+  },
+  async ({ name, newName, description, isPriority }) => {
+    const payload = {};
+    if (newName) {
+      payload.currentName = name;
+      payload.newName = newName;
+    } else {
+      payload.name = name;
+    }
+    if (description !== undefined) payload.description = description;
+    if (isPriority !== undefined) payload.isPriority = isPriority;
+
+    const result = await callRaHApi('/api/dimensions', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    const dim = result.data?.dimension || newName || name;
+    return {
+      content: [{ type: 'text', text: `Updated dimension: ${dim}` }],
+      structuredContent: {
+        success: true,
+        dimension: dim,
+        message: `Updated dimension: ${dim}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_delete_dimension',
+  {
+    title: 'Delete RA-H dimension',
+    description: 'Delete a dimension and remove it from all nodes.',
+    inputSchema: deleteDimensionInputSchema,
+    outputSchema: deleteDimensionOutputSchema
+  },
+  async ({ name }) => {
+    const result = await callRaHApi(`/api/dimensions?name=${encodeURIComponent(name)}`, {
+      method: 'DELETE'
+    });
+
+    return {
+      content: [{ type: 'text', text: `Deleted dimension: ${name}` }],
+      structuredContent: {
+        success: true,
+        message: `Deleted dimension: ${name}`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_search_embeddings',
+  {
+    title: 'Semantic search RA-H',
+    description: 'Search node content using semantic similarity (vector search).',
+    inputSchema: searchEmbeddingsInputSchema,
+    outputSchema: searchEmbeddingsOutputSchema
+  },
+  async ({ query, limit = 10 }) => {
+    const params = new URLSearchParams();
+    params.set('q', query);
+    params.set('limit', String(Math.min(Math.max(limit, 1), 20)));
+
+    const result = await callRaHApi(`/api/nodes/search?${params.toString()}`, {
+      method: 'GET'
+    });
+
+    const results = Array.isArray(result.data) ? result.data : [];
+    return {
+      content: [{ type: 'text', text: `Found ${results.length} semantically similar result(s).` }],
+      structuredContent: {
+        count: results.length,
+        results: results.map(r => ({
+          nodeId: r.node_id || r.nodeId || r.id,
+          title: r.title || 'Untitled',
+          chunkPreview: (r.chunk || r.content || '').slice(0, 200),
+          similarity: r.similarity || r.score || 0
+        }))
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_list_workflows',
+  {
+    title: 'List RA-H workflows',
+    description: 'List all available workflows.',
+    inputSchema: {},
+    outputSchema: listWorkflowsOutputSchema
+  },
+  async () => {
+    const result = await callRaHApi('/api/workflows', { method: 'GET' });
+    const workflows = Array.isArray(result.data) ? result.data : [];
+
+    return {
+      content: [{ type: 'text', text: `Found ${workflows.length} workflow(s).` }],
+      structuredContent: {
+        count: workflows.length,
+        workflows: workflows.map(w => ({
+          key: w.key,
+          displayName: w.displayName,
+          description: w.description || null,
+          enabled: w.enabled
+        }))
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_get_workflow',
+  {
+    title: 'Get RA-H workflow',
+    description: 'Fetch a workflow definition by key (e.g., "integrate", "prep"). Returns instructions that can be followed.',
+    inputSchema: getWorkflowInputSchema,
+    outputSchema: getWorkflowOutputSchema
+  },
+  async ({ workflowKey }) => {
+    try {
+      const result = await callRaHApi(`/api/workflows/${encodeURIComponent(workflowKey)}`, {
+        method: 'GET'
+      });
+
+      const workflow = result.data;
+      return {
+        content: [{ type: 'text', text: `Workflow "${workflowKey}": ${workflow?.displayName || 'Unknown'}` }],
+        structuredContent: {
+          success: true,
+          workflow: workflow ? {
+            key: workflow.key,
+            displayName: workflow.displayName,
+            description: workflow.description || null,
+            instructions: workflow.instructions,
+            enabled: workflow.enabled
+          } : null,
+          message: `Fetched workflow "${workflowKey}"`
+        }
+      };
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Workflow "${workflowKey}" not found.` }],
+        structuredContent: {
+          success: false,
+          workflow: null,
+          message: `Workflow "${workflowKey}" not found`
+        }
+      };
+    }
+  }
+);
+
+server.registerTool(
+  'rah_execute_workflow',
+  {
+    title: 'Execute RA-H workflow',
+    description: 'Execute a predefined workflow (e.g., "integrate" for connection discovery).',
+    inputSchema: executeWorkflowInputSchema,
+    outputSchema: executeWorkflowOutputSchema
+  },
+  async ({ workflowKey, nodeId }) => {
+    const payload = { workflowKey };
+    if (nodeId) payload.nodeId = nodeId;
+
+    const result = await callRaHApi('/api/workflows/execute', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    return {
+      content: [{ type: 'text', text: `Workflow "${workflowKey}" initiated.` }],
+      structuredContent: {
+        success: true,
+        message: result.message || `Workflow "${workflowKey}" initiated.`
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_extract_url',
+  {
+    title: 'Extract URL content',
+    description: 'Extract content from a webpage URL. Returns title, content, and metadata for creating nodes.',
+    inputSchema: extractUrlInputSchema,
+    outputSchema: extractUrlOutputSchema
+  },
+  async ({ url }) => {
+    const result = await callRaHApi('/api/extract/url', {
+      method: 'POST',
+      body: JSON.stringify({ url })
+    });
+
+    const summary = `Extracted content from: ${result.title || 'webpage'}`;
+    return {
+      content: [{ type: 'text', text: summary }],
+      structuredContent: {
+        success: true,
+        title: result.title || 'Untitled',
+        content: result.content || '',
+        chunk: result.chunk || '',
+        metadata: result.metadata || {}
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_extract_youtube',
+  {
+    title: 'Extract YouTube transcript',
+    description: 'Extract transcript from a YouTube video. Returns title, channel, transcript, and metadata.',
+    inputSchema: extractYoutubeInputSchema,
+    outputSchema: extractYoutubeOutputSchema
+  },
+  async ({ url }) => {
+    const result = await callRaHApi('/api/extract/youtube', {
+      method: 'POST',
+      body: JSON.stringify({ url })
+    });
+
+    const summary = `Extracted transcript from: ${result.title || 'YouTube video'}`;
+    return {
+      content: [{ type: 'text', text: summary }],
+      structuredContent: {
+        success: true,
+        title: result.title || 'Untitled',
+        channel: result.channel || 'Unknown',
+        transcript: result.transcript || '',
+        metadata: result.metadata || {}
+      }
+    };
+  }
+);
+
+server.registerTool(
+  'rah_extract_pdf',
+  {
+    title: 'Extract PDF content',
+    description: 'Extract content from a PDF file URL. Returns title, content, and metadata for creating nodes.',
+    inputSchema: extractPdfInputSchema,
+    outputSchema: extractPdfOutputSchema
+  },
+  async ({ url }) => {
+    const result = await callRaHApi('/api/extract/pdf', {
+      method: 'POST',
+      body: JSON.stringify({ url })
+    });
+
+    const summary = `Extracted content from: ${result.title || 'PDF document'}`;
+    return {
+      content: [{ type: 'text', text: summary }],
+      structuredContent: {
+        success: true,
+        title: result.title || 'Untitled PDF',
+        content: result.content || '',
+        chunk: result.chunk || '',
+        metadata: result.metadata || {}
       }
     };
   }
