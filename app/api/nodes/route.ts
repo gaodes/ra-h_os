@@ -61,25 +61,28 @@ export async function POST(request: NextRequest) {
 
     const rawContent = typeof body.content === 'string' ? body.content : null;
 
-    // Generate description BEFORE dimension assignment (used as primary context for matching)
-    let nodeDescription: string | undefined;
-    try {
-      nodeDescription = await generateDescription({
-        title: body.title,
-        content: rawContent || undefined,
-        metadata: body.metadata,
-        type: body.type
-      });
-    } catch (error) {
-      console.error('Error generating description:', error);
-      // Continue without description - dimension assignment will use content as fallback
-    }
-
+    // Process provided dimensions first (needed for description generation)
     const providedDimensions = Array.isArray(body.dimensions) ? body.dimensions : [];
     const trimmedProvidedDimensions = providedDimensions
       .map((dim: unknown) => typeof dim === 'string' ? dim.trim() : '')
       .filter(Boolean)
       .slice(0, 8);
+
+    // Generate description with all available context
+    let nodeDescription: string | undefined;
+    try {
+      nodeDescription = await generateDescription({
+        title: body.title,
+        content: rawContent || undefined,
+        link: body.link || undefined,
+        metadata: body.metadata,
+        type: body.type,
+        dimensions: trimmedProvidedDimensions
+      });
+    } catch (error) {
+      console.error('Error generating description:', error);
+      // Continue without description - dimension assignment will use content as fallback
+    }
 
     // Auto-assign locked dimensions + keyword dimensions for all new nodes
     const { locked, keywords } = await DimensionService.assignDimensions({

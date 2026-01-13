@@ -32,8 +32,10 @@ export async function POST(
     const newDescription = await generateDescription({
       title: node.title,
       content: node.content || undefined,
+      link: node.link || undefined,
       metadata: node.metadata as { source?: string; channel_name?: string; author?: string; site_name?: string } | undefined,
-      type: (node.metadata as { type?: string } | null)?.type
+      type: (node.metadata as { type?: string } | null)?.type,
+      dimensions: node.dimensions || []
     });
 
     // Update the node with the new description
