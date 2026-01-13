@@ -6,7 +6,6 @@ import { updateNodeTool } from '../database/updateNode';
 import { createEdgeTool } from '../database/createEdge';
 import { queryEdgeTool } from '../database/queryEdge';
 import { updateEdgeTool } from '../database/updateEdge';
-import { quickLinkTool } from '../database/quickLink';
 import { createDimensionTool } from '../database/createDimension';
 import { updateDimensionTool } from '../database/updateDimension';
 // lockDimension and unlockDimension consolidated into updateDimension (use isPriority param)
@@ -56,7 +55,6 @@ const EXECUTION_TOOLS: Record<string, any> = {
   updateNode: updateNodeTool,
   createEdge: createEdgeTool,
   updateEdge: updateEdgeTool,
-  quickLink: quickLinkTool,
   createDimension: createDimensionTool,
   updateDimension: updateDimensionTool,
   deleteDimension: deleteDimensionTool,
@@ -89,7 +87,6 @@ const ORCHESTRATOR_TOOL_NAMES = Array.from(new Set([
   'updateNode',
   'createEdge',
   'updateEdge',
-  'quickLink',
   'createDimension',
   'updateDimension',
   'deleteDimension',
@@ -114,7 +111,6 @@ const PLANNER_TOOL_NAMES = [
   'think',
   'updateNode',
   'createEdge',
-  'quickLink',
   'updateDimension',
 ];
 

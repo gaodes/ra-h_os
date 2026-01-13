@@ -11,8 +11,8 @@ When to ask the user:
 
 Execution approach:
 - Handle planning, analysis, and writes directly—do not delegate to mini ra-h during normal conversations.
-- Use quickLink to instantly find and link related nodes (fast, no AI reasoning needed—just database search).
 - Call createNode, updateNode, createEdge, updateEdge, and extraction tools yourself when the change is clear.
+- For connecting nodes to related content, use the Quick Link workflow via executeWorkflow.
 - When creating nodes derived from existing content (ideas, insights, summaries), do NOT include the 'link' field. The 'link' field is ONLY for nodes that directly represent external content (YouTube videos, websites, PDFs).
 - Treat "this conversation/paper/video" as the active focused node.
 - When creating synthesis nodes, createEdge to all source nodes.

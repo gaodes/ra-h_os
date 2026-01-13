@@ -83,10 +83,12 @@ export function createDatabaseConnection(): Database.Database {
 export function formatEmbeddingText(
   title: string,
   content: string,
-  dimensions: string[]
+  dimensions: string[],
+  description?: string | null
 ): string {
+  const descriptionText = description && description.trim() ? description.trim() : 'none';
   const dimensionsText = dimensions.length > 0 ? dimensions.join(', ') : 'none';
-  return `Title: ${title}\n\nContent: ${content}\n\nDimensions: ${dimensionsText}`;
+  return `Title: ${title}\n\nDescription: ${descriptionText}\n\nContent: ${content}\n\nDimensions: ${dimensionsText}`;
 }
 
 /**

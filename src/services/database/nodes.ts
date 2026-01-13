@@ -36,25 +36,27 @@ export class NodeService {
       params.push(...dimensions);
     }
 
-    // Text search in title and content (SQLite LIKE with COLLATE NOCASE)
+    // Text search in title, description, and content (SQLite LIKE with COLLATE NOCASE)
     if (search) {
-      query += ` AND (n.title LIKE ? COLLATE NOCASE OR n.content LIKE ? COLLATE NOCASE)`;
-      params.push(`%${search}%`, `%${search}%`);
+      query += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.content LIKE ? COLLATE NOCASE)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     // Sorting logic
     if (search) {
-      // For search queries, prioritize by relevance: exact title → starts with → contains in title → content
-      query += ` ORDER BY 
-        CASE WHEN LOWER(n.title) = LOWER(?) THEN 1 ELSE 5 END,
-        CASE WHEN LOWER(n.title) LIKE LOWER(?) THEN 2 ELSE 5 END,
-        CASE WHEN n.title LIKE ? COLLATE NOCASE THEN 3 ELSE 5 END,
-        CASE WHEN n.content LIKE ? COLLATE NOCASE THEN 4 ELSE 5 END,
+      // For search queries, prioritize by relevance: exact title → starts with → contains in title → description → content
+      query += ` ORDER BY
+        CASE WHEN LOWER(n.title) = LOWER(?) THEN 1 ELSE 6 END,
+        CASE WHEN LOWER(n.title) LIKE LOWER(?) THEN 2 ELSE 6 END,
+        CASE WHEN n.title LIKE ? COLLATE NOCASE THEN 3 ELSE 6 END,
+        CASE WHEN n.description LIKE ? COLLATE NOCASE THEN 4 ELSE 6 END,
+        CASE WHEN n.content LIKE ? COLLATE NOCASE THEN 5 ELSE 6 END,
         n.updated_at DESC`;
       params.push(
         search,           // Exact match (case-insensitive)
         `${search}%`,     // Starts with search term
         `%${search}%`,    // Contains in title
+        `%${search}%`,    // Contains in description
         `%${search}%`     // Contains in content
       );
     } else if (sortBy === 'edges') {

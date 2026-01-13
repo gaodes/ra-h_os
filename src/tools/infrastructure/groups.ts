@@ -56,7 +56,6 @@ export const TOOL_GROUP_ASSIGNMENTS: Record<string, string> = {
   updateNode: 'execution',
   createEdge: 'execution',
   updateEdge: 'execution',
-  quickLink: 'execution',
   embedContent: 'execution',
   youtubeExtract: 'execution',
   websiteExtract: 'execution',

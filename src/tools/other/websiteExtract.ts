@@ -163,10 +163,12 @@ export const websiteExtractTool = tool({
 
       console.log('🎯 WebsiteExtract completed successfully');
 
+      // Use actual assigned dimensions from API response (includes auto-assigned locked + keywords)
+      const actualDimensions: string[] = createResult.data?.dimensions || trimmedDimensions || [];
       const formattedNode = createResult.data?.id
-        ? formatNodeForChat({ id: createResult.data.id, title: nodeTitle, dimensions: trimmedDimensions || [] })
+        ? formatNodeForChat({ id: createResult.data.id, title: nodeTitle, dimensions: actualDimensions })
         : nodeTitle;
-      const dimsDisplay = trimmedDimensions.length > 0 ? trimmedDimensions.join(', ') : 'none';
+      const dimsDisplay = actualDimensions.length > 0 ? actualDimensions.join(', ') : 'none';
 
       return {
         success: true,
@@ -176,7 +178,7 @@ export const websiteExtractTool = tool({
           title: nodeTitle,
           contentLength: (result.chunk || result.content || '').length,
           url: url,
-          dimensions: trimmedDimensions
+          dimensions: actualDimensions
         }
       };
     } catch (error) {

@@ -2,10 +2,10 @@ import { tool } from 'ai';
 import { z } from 'zod';
 
 export const createDimensionTool = tool({
-  description: 'Create a new dimension or update existing dimension',
+  description: 'Create a new dimension or update existing dimension. IMPORTANT: Always ask the user for a description explaining what belongs in this dimension before creating it. Dimensions without descriptions cannot be auto-assigned.',
   inputSchema: z.object({
     name: z.string().describe('Dimension name'),
-    description: z.string().max(500).optional().describe('Dimension description (max 500 characters)'),
+    description: z.string().min(1).max(500).describe('Dimension description explaining what content belongs in this dimension (required, max 500 characters)'),
     isPriority: z.boolean().optional().describe('Whether to lock this dimension for auto-assignment (default: false)')
   }),
   execute: async (params) => {
@@ -26,7 +26,7 @@ export const createDimensionTool = tool({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: trimmedName,
-          description: params.description?.trim() || null,
+          description: params.description.trim(),
           isPriority: params.isPriority || false
         })
       });

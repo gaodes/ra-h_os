@@ -13,6 +13,7 @@ export type QuickAddInputType = 'youtube' | 'website' | 'pdf' | 'note' | 'chat';
 export interface QuickAddInput {
   rawInput: string;
   mode?: QuickAddMode;
+  description?: string;
 }
 
 function isLikelyChatTranscript(raw: string): boolean {
@@ -197,24 +198,31 @@ async function handleExtractionQuickAdd(type: ExtractionQuickAddType, url: strin
   });
 }
 
-async function handleNoteQuickAdd(rawInput: string, task: string): Promise<string> {
+async function handleNoteQuickAdd(rawInput: string, task: string, userDescription?: string): Promise<string> {
   const content = rawInput.trim();
   if (!content) {
     throw new Error('Input is required to create a note');
   }
 
   const title = deriveNoteTitle(content);
+  const nodePayload: Record<string, unknown> = {
+    title,
+    content,
+    metadata: {
+      source: 'quick-add-note',
+      refined_at: new Date().toISOString(),
+    },
+  };
+
+  // If user provided a description, use it instead of auto-generating
+  if (userDescription && userDescription.trim()) {
+    nodePayload.description = userDescription.trim();
+  }
+
   const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      title,
-      content,
-      metadata: {
-        source: 'quick-add-note',
-        refined_at: new Date().toISOString(),
-      },
-    }),
+    body: JSON.stringify(nodePayload),
   });
 
   const rawResult = await response.json();
@@ -332,7 +340,7 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
   });
 }
 
-export async function enqueueQuickAdd({ rawInput, mode }: QuickAddInput) {
+export async function enqueueQuickAdd({ rawInput, mode, description }: QuickAddInput) {
   const inputType = detectInputType(rawInput, mode);
   const context: string[] = (inputType === 'note' || inputType === 'chat') ? [] : [rawInput];
   const task = buildTaskPrompt(inputType, rawInput);
@@ -350,7 +358,7 @@ export async function enqueueQuickAdd({ rawInput, mode }: QuickAddInput) {
 
       let summary: string;
       if (inputType === 'note') {
-        summary = await handleNoteQuickAdd(rawInput, task);
+        summary = await handleNoteQuickAdd(rawInput, task, description);
       } else if (inputType === 'chat') {
         summary = await handleChatTranscriptQuickAdd(rawInput, task);
       } else {

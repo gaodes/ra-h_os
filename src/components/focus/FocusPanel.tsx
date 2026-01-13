@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, type DragEvent } from 'react';
-import { Eye, Trash2, Link, Loader, Database, Check } from 'lucide-react';
+import { Eye, Trash2, Link, Loader, Database, Check, RefreshCw } from 'lucide-react';
 import { parseAndRenderContent } from '@/components/helpers/NodeLabelRenderer';
 import { parseNodeMarkers } from '@/tools/infrastructure/nodeFormatter';
 import { Node, NodeConnection } from '@/types/database';
@@ -86,6 +86,9 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   
   // Title expanded state for click-to-expand full title
   const [titleExpanded, setTitleExpanded] = useState<{ [key: number]: boolean }>({});
+
+  // Description regeneration state
+  const [regeneratingDescription, setRegeneratingDescription] = useState<number | null>(null);
 
   // Fetch priority dimensions on mount
   useEffect(() => {
@@ -385,6 +388,31 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     }
     // Small delay to allow for clicking inline buttons
     setTimeout(attemptSave, 150);
+  };
+
+  // Regenerate description for a node
+  const regenerateDescription = async (nodeId: number) => {
+    setRegeneratingDescription(nodeId);
+    try {
+      const response = await fetch(`/api/nodes/${nodeId}/regenerate-description`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to regenerate description');
+      }
+
+      const result = await response.json();
+      if (result.node) {
+        setNodesData(prev => ({ ...prev, [nodeId]: result.node }));
+      }
+    } catch (error) {
+      console.error('Error regenerating description:', error);
+      alert('Failed to regenerate description. Please try again.');
+    } finally {
+      setRegeneratingDescription(null);
+    }
   };
 
   // --- @mention state ---
@@ -814,7 +842,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     flexShrink: 0,
                     fontFamily: "'SF Mono', 'Fira Code', monospace"
                   }}>
-                    #{suggestion.id}
+                    {suggestion.id}
                   </span>
                   <span style={{
                     fontSize: '15px',
@@ -1484,7 +1512,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 }}
                 title="Drag to chat to reference this node"
               >
-                #{activeTab}
+                {activeTab}
               </span>
 
               {editingField === 'title' ? (
@@ -1559,10 +1587,119 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
 
             </div>
 
-
+            {/* Description Section */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '4px'
+              }}>
+                <span style={{
+                  fontSize: '9px',
+                  color: '#555',
+                  textTransform: 'uppercase'
+                }}>
+                  description
+                </span>
+                <button
+                  onClick={() => activeTab && regenerateDescription(activeTab)}
+                  disabled={regeneratingDescription === activeTab}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #333',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    fontSize: '9px',
+                    color: '#888',
+                    cursor: regeneratingDescription === activeTab ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: regeneratingDescription === activeTab ? 0.5 : 1
+                  }}
+                  title="Regenerate description using AI"
+                >
+                  <RefreshCw
+                    size={10}
+                    style={{
+                      animation: regeneratingDescription === activeTab ? 'spin 1s linear infinite' : 'none'
+                    }}
+                  />
+                  {regeneratingDescription === activeTab ? 'Regenerating...' : 'Regenerate'}
+                </button>
+              </div>
+              {editingField === 'description' ? (
+                <div style={{ position: 'relative' }}>
+                  <textarea
+                    ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                    value={editingValue}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 280) {
+                        setEditingValue(e.target.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        saveField();
+                      } else if (e.key === 'Escape') {
+                        cancelEdit();
+                      }
+                    }}
+                    onBlur={handleBlur}
+                    disabled={savingField === 'description'}
+                    style={{
+                      width: '100%',
+                      minHeight: '60px',
+                      color: '#a5a5a5',
+                      fontSize: '13px',
+                      lineHeight: '1.5',
+                      background: 'transparent',
+                      border: '1px solid #1a1a1a',
+                      borderRadius: '4px',
+                      padding: '8px',
+                      fontFamily: 'inherit',
+                      resize: 'vertical',
+                      outline: 'none'
+                    }}
+                    placeholder="This is a..."
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    bottom: '8px',
+                    right: '8px',
+                    fontSize: '10px',
+                    color: editingValue.length >= 260 ? '#f59e0b' : '#555'
+                  }}>
+                    {editingValue.length}/280
+                  </span>
+                </div>
+              ) : (
+                <div
+                  onClick={() => startEdit('description', nodesData[activeTab]?.description || '')}
+                  style={{
+                    color: nodesData[activeTab]?.description ? '#a5a5a5' : '#555',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    padding: '8px',
+                    border: '1px solid transparent',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontStyle: nodesData[activeTab]?.description ? 'normal' : 'italic',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1a1a1a'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
+                >
+                  {nodesData[activeTab]?.description || 'Click to add description...'}
+                  {savingField === 'description' && <span style={{ color: '#555', fontSize: '10px', marginLeft: '6px' }}>saving...</span>}
+                </div>
+              )}
+            </div>
 
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ 
+              <div style={{
                 overflowX: 'auto',
                 overflowY: 'visible',
                 position: 'relative'
@@ -1687,7 +1824,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                                onMouseDown={(e) => { e.preventDefault(); replaceMentionWithToken(n.id, n.title); }}
                                onMouseEnter={() => setMentionIndex(idx)}
                                style={{ padding: '6px 8px', fontSize: 12, color: '#ddd', cursor: 'pointer', background: idx === mentionIndex ? '#252525' : 'transparent', borderBottom: '1px solid #2a2a2a' }}>
-                            <span style={{ color: '#666', marginRight: 6 }}>#{n.id}</span>
+                            <span style={{ color: '#666', marginRight: 6 }}>{n.id}</span>
                             <span>{n.title.length > 60 ? n.title.slice(0,60) + '…' : n.title}</span>
                           </div>
                         ))
@@ -2023,7 +2160,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                     flexShrink: 0,
                     fontFamily: "'SF Mono', 'Fira Code', monospace"
                   }}>
-                    #{suggestion.id}
+                    {suggestion.id}
                   </span>
                   <span style={{
                     fontSize: '14px',
@@ -2123,7 +2260,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                             flexShrink: 0,
                             fontFamily: "'SF Mono', 'Fira Code', monospace"
                           }}>
-                            #{connection.connected_node.id}
+                            {connection.connected_node.id}
                           </span>
                           <span
                             onClick={() => onNodeClick?.(connection.connected_node.id)}

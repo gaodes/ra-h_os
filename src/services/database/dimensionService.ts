@@ -53,6 +53,7 @@ export class DimensionService {
     title: string;
     content?: string;
     link?: string;
+    description?: string;
   }): Promise<{ locked: string[]; keywords: string[] }> {
     try {
       const lockedDimensions = await this.getLockedDimensions();
@@ -69,7 +70,7 @@ export class DimensionService {
       const response = await generateText({
         model: openaiProvider('gpt-4o-mini'),
         prompt,
-        maxOutputTokens: 150, // Increased for two-part response
+        maxOutputTokens: 300, // Increased to accommodate more dimensions
         temperature: 0.1,
       });
 
@@ -145,16 +146,29 @@ export class DimensionService {
    * Build AI prompt for dimension assignment (locked + keyword dimensions)
    */
   private static buildAssignmentPrompt(
-    nodeData: { title: string; content?: string; link?: string },
+    nodeData: { title: string; content?: string; link?: string; description?: string },
     lockedDimensions: LockedDimension[]
   ): string {
-    const contentPreview = nodeData.content?.slice(0, 1000) || '';
+    // Use description as primary context, content as fallback
+    let nodeContextSection: string;
+    if (nodeData.description) {
+      const contentPreview = nodeData.content?.slice(0, 500) || '';
+      nodeContextSection = `DESCRIPTION: ${nodeData.description}
 
-    // Only include dimensions that have descriptions
-    const dimensionsWithDescriptions = lockedDimensions.filter(d => d.description && d.description.trim().length > 0);
+CONTENT PREVIEW: ${contentPreview}${nodeData.content && nodeData.content.length > 500 ? '...' : ''}`;
+    } else {
+      const contentPreview = nodeData.content?.slice(0, 2000) || '';
+      nodeContextSection = `CONTENT: ${contentPreview}${nodeData.content && nodeData.content.length > 2000 ? '...' : ''}`;
+    }
 
-    const dimensionsList = dimensionsWithDescriptions
-      .map(d => `DIMENSION: "${d.name}"\nDESCRIPTION: ${d.description}`)
+    // Include ALL locked dimensions, using fallback text for those without descriptions
+    const dimensionsList = lockedDimensions
+      .map(d => {
+        const description = d.description && d.description.trim().length > 0
+          ? d.description
+          : '(none - infer from name)';
+        return `DIMENSION: "${d.name}"\nDESCRIPTION: ${description}`;
+      })
       .join('\n---\n');
 
     return `You are categorizing a knowledge node. You will:
@@ -163,7 +177,7 @@ export class DimensionService {
 
 === NODE TO CATEGORIZE ===
 Title: ${nodeData.title}
-Content: ${contentPreview}${nodeData.content && nodeData.content.length > 1000 ? '...' : ''}
+${nodeContextSection}
 URL: ${nodeData.link || 'none'}
 
 === PART 1: LOCKED DIMENSIONS ===
@@ -171,7 +185,6 @@ CRITICAL: Read each dimension's DESCRIPTION carefully.
 The description defines what belongs in that dimension.
 Only assign if the content CLEARLY matches the description.
 If unsure, skip it — better to miss than assign incorrectly.
-Maximum 3 locked dimensions.
 
 AVAILABLE LOCKED DIMENSIONS:
 ${dimensionsList}
@@ -224,11 +237,6 @@ KEYWORDS:
 
         if (matchedDimension && !lockedDimensions.includes(matchedDimension.name)) {
           lockedDimensions.push(matchedDimension.name);
-
-          // Limit to 3 locked dimensions
-          if (lockedDimensions.length >= 3) {
-            break;
-          }
         }
       }
     }

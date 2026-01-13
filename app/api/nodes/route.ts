@@ -4,6 +4,7 @@ import { Node, NodeFilters } from '@/types/database';
 import { autoEmbedQueue } from '@/services/embedding/autoEmbedQueue';
 import { hasSufficientContent } from '@/services/embedding/constants';
 import { DimensionService } from '@/services/database/dimensionService';
+import { generateDescription } from '@/services/database/descriptionService';
 
 export const runtime = 'nodejs';
 
@@ -60,17 +61,32 @@ export async function POST(request: NextRequest) {
 
     const rawContent = typeof body.content === 'string' ? body.content : null;
 
+    // Generate description BEFORE dimension assignment (used as primary context for matching)
+    let nodeDescription: string | undefined;
+    try {
+      nodeDescription = await generateDescription({
+        title: body.title,
+        content: rawContent || undefined,
+        metadata: body.metadata,
+        type: body.type
+      });
+    } catch (error) {
+      console.error('Error generating description:', error);
+      // Continue without description - dimension assignment will use content as fallback
+    }
+
     const providedDimensions = Array.isArray(body.dimensions) ? body.dimensions : [];
     const trimmedProvidedDimensions = providedDimensions
       .map((dim: unknown) => typeof dim === 'string' ? dim.trim() : '')
       .filter(Boolean)
-      .slice(0, 5);
+      .slice(0, 8);
 
     // Auto-assign locked dimensions + keyword dimensions for all new nodes
     const { locked, keywords } = await DimensionService.assignDimensions({
       title: body.title,
       content: rawContent || undefined,
-      link: body.link
+      link: body.link,
+      description: nodeDescription
     });
 
     // Ensure keyword dimensions exist in the database (create if new)
@@ -80,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     // Combine provided, locked, and keyword dimensions, remove duplicates
     const finalDimensions = [...new Set([...trimmedProvidedDimensions, ...locked, ...keywords])]
-      .slice(0, 5); // Ensure we don't exceed 5 total dimensions
+      .slice(0, 8); // max 8 total
     const rawChunk = typeof body.chunk === 'string' ? body.chunk : null;
     let chunkToStore = rawChunk;
     let chunkStatus: Node['chunk_status'];
@@ -94,6 +110,7 @@ export async function POST(request: NextRequest) {
 
     const node = await nodeService.createNode({
       title: body.title,
+      description: nodeDescription,
       content: rawContent ?? undefined,
       link: body.link,
       dimensions: finalDimensions,

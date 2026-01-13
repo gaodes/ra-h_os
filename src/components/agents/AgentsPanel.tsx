@@ -168,12 +168,12 @@ export default function AgentsPanel({ openTabsData, activeTabId, activeDimension
 
   const selectedDelegation = orderedDelegations.find(d => d.sessionId === activeAgentTab);
 
-  const handleQuickAddSubmit = async ({ input, mode }: { input: string; mode: 'link' | 'note' | 'chat' }) => {
+  const handleQuickAddSubmit = async ({ input, mode, description }: { input: string; mode: 'link' | 'note' | 'chat'; description?: string }) => {
     try {
       const response = await fetch('/api/quick-add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, mode })
+        body: JSON.stringify({ input, mode, description })
       });
 
       if (!response.ok) {

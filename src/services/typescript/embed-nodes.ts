@@ -17,6 +17,7 @@ interface NodeRecord {
   id: number;
   title: string;
   content: string | null;
+  description: string | null;
   dimensions_json: string;
   embedding?: Buffer | null;
   embedding_updated_at?: string | null;
@@ -106,7 +107,8 @@ Focus on the main concepts, key relationships, and practical implications.`;
     let embeddingText = formatEmbeddingText(
       node.title,
       node.content || '',
-      dimensions
+      dimensions,
+      node.description
     );
 
     // Add AI analysis if content exists
@@ -175,7 +177,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
     if (nodeId) {
       // Single node
       query = `
-        SELECT n.id, n.title, n.content,
+        SELECT n.id, n.title, n.content, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at
@@ -186,7 +188,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
     } else if (forceReEmbed) {
       // All nodes
       query = `
-        SELECT n.id, n.title, n.content,
+        SELECT n.id, n.title, n.content, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at
@@ -196,7 +198,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
     } else {
       // Only nodes without embeddings
       query = `
-        SELECT n.id, n.title, n.content,
+        SELECT n.id, n.title, n.content, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at

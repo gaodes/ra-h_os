@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 interface DimensionSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDimensionSelect: (dimension: string) => void;
+  onDimensionSelect: (dimension: string, description?: string) => void;
   existingDimensions: string[];
 }
 
@@ -25,7 +25,9 @@ export default function DimensionSearchModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<DimensionSuggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [newDimensionDescription, setNewDimensionDescription] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -95,31 +97,35 @@ export default function DimensionSearchModal({
     };
   }, [isOpen, onClose]);
 
+  // Track if we're in "create new" mode to avoid re-fetching
+  const isCreatingNew = searchQuery.trim() &&
+    !suggestions.some(s => s.dimension.toLowerCase() === searchQuery.toLowerCase().trim());
+
   // Fetch dimension suggestions
   useEffect(() => {
     const fetchSuggestions = async () => {
       try {
         const response = await fetch('/api/dimensions/popular?limit=50');
         const result = await response.json();
-        
+
         if (result.success) {
           const allDimensions: DimensionSuggestion[] = result.data;
-          
+
           // Filter based on search query and exclude existing dimensions
           const filtered = allDimensions.filter(dim => {
-            const matchesQuery = !searchQuery.trim() || 
+            const matchesQuery = !searchQuery.trim() ||
               dim.dimension.toLowerCase().includes(searchQuery.toLowerCase());
             const notExisting = !existingDimensions.includes(dim.dimension);
             return matchesQuery && notExisting;
           });
-          
+
           // Sort: priority first, then by count
           const sorted = filtered.sort((a, b) => {
             if (a.isPriority && !b.isPriority) return -1;
             if (!a.isPriority && b.isPriority) return 1;
             return b.count - a.count;
           });
-          
+
           setSuggestions(sorted.slice(0, 20));
           setSelectedIndex(0);
         }
@@ -129,11 +135,13 @@ export default function DimensionSearchModal({
       }
     };
 
-    if (isOpen) {
+    // Only fetch when modal is open and we're not actively creating a new dimension
+    // (user has typed description means they're committing to create)
+    if (isOpen && !newDimensionDescription.trim()) {
       const timeoutId = setTimeout(fetchSuggestions, 100);
       return () => clearTimeout(timeoutId);
     }
-  }, [searchQuery, existingDimensions, isOpen]);
+  }, [searchQuery, existingDimensions, isOpen, newDimensionDescription]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -145,20 +153,21 @@ export default function DimensionSearchModal({
       setSelectedIndex(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      
+
       if (suggestions[selectedIndex]) {
         // Select existing dimension
         handleSelectDimension(suggestions[selectedIndex].dimension);
       } else if (searchQuery.trim()) {
-        // Create new dimension
-        handleSelectDimension(searchQuery.trim());
+        // Create new dimension with description
+        handleSelectDimension(searchQuery.trim(), newDimensionDescription.trim() || undefined);
       }
     }
   };
 
-  const handleSelectDimension = (dimension: string) => {
-    onDimensionSelect(dimension);
+  const handleSelectDimension = (dimension: string, description?: string) => {
+    onDimensionSelect(dimension, description);
     setSearchQuery('');
+    setNewDimensionDescription('');
     setSuggestions([]);
     onClose();
   };
@@ -182,7 +191,7 @@ export default function DimensionSearchModal({
       aria-modal="true"
       aria-label="Search dimensions"
     >
-      <div ref={modalRef} className="search-container">
+      <div ref={modalRef} className="search-container" onClick={(e) => e.stopPropagation()}>
         {/* Search Input */}
         <div className="search-input-wrapper">
           <svg className="search-icon" viewBox="0 0 20 20" fill="currentColor">
@@ -228,14 +237,41 @@ export default function DimensionSearchModal({
 
         {/* Create New Option */}
         {canCreateNew && (
-          <div className="search-create">
+          <div
+            className="search-create"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="create-header">
+              <span className="create-icon">+</span>
+              <span className="create-title">Create &quot;{searchQuery.trim()}&quot;</span>
+            </div>
+            <div className="description-input-wrapper">
+              <textarea
+                ref={textareaRef}
+                value={newDimensionDescription}
+                onChange={(e) => setNewDimensionDescription(e.target.value.slice(0, 500))}
+                onFocus={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Describe what belongs in this dimension..."
+                className="description-input"
+                rows={2}
+              />
+              <span className="description-counter">{newDimensionDescription.length}/500</span>
+            </div>
+            {!newDimensionDescription.trim() && (
+              <div className="description-warning">
+                Dimensions without descriptions may not auto-assign correctly
+              </div>
+            )}
             <button
-              onClick={() => handleSelectDimension(searchQuery.trim())}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectDimension(searchQuery.trim(), newDimensionDescription.trim() || undefined);
+              }}
               onMouseEnter={() => setSelectedIndex(suggestions.length)}
               className={`create-button ${selectedIndex === suggestions.length ? 'selected' : ''}`}
             >
-              <span className="create-icon">+</span>
-              Create "{searchQuery.trim()}"
+              Create Dimension
             </button>
           </div>
         )}
@@ -385,35 +421,98 @@ export default function DimensionSearchModal({
           border: 1px solid #262626;
           border-radius: 16px;
           overflow: hidden;
-          box-shadow: 
+          padding: 16px 20px;
+          box-shadow:
             0 0 0 1px rgba(255, 255, 255, 0.04),
             0 24px 48px -12px rgba(0, 0, 0, 0.6);
         }
-        
+
+        .create-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+
+        .create-title {
+          color: #22c55e;
+          font-size: 15px;
+          font-weight: 500;
+        }
+
+        .description-input-wrapper {
+          position: relative;
+          margin-bottom: 8px;
+        }
+
+        .description-input {
+          width: 100%;
+          padding: 12px;
+          background: #0a0a0a;
+          border: 1px solid #333;
+          border-radius: 8px;
+          color: #e5e5e5;
+          font-size: 14px;
+          font-family: inherit;
+          resize: none;
+          outline: none;
+          transition: border-color 150ms ease;
+        }
+
+        .description-input:focus {
+          border-color: #525252;
+        }
+
+        .description-input::placeholder {
+          color: #525252;
+        }
+
+        .description-counter {
+          position: absolute;
+          bottom: 8px;
+          right: 12px;
+          font-size: 11px;
+          color: #525252;
+          font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        .description-warning {
+          margin-bottom: 12px;
+          padding: 8px 12px;
+          background: rgba(234, 179, 8, 0.1);
+          border: 1px solid rgba(234, 179, 8, 0.2);
+          border-radius: 6px;
+          color: #eab308;
+          font-size: 12px;
+        }
+
         .create-button {
           width: 100%;
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 16px 20px;
-          background: transparent;
-          border: none;
+          justify-content: center;
+          gap: 8px;
+          padding: 12px 16px;
+          background: #1a1a1a;
+          border: 1px solid #333;
+          border-radius: 8px;
           cursor: pointer;
           transition: background 100ms ease;
-          text-align: left;
           font-family: inherit;
           color: #22c55e;
-          font-size: 15px;
+          font-size: 14px;
+          font-weight: 500;
         }
-        
+
         .create-button:hover,
         .create-button.selected {
-          background: #1a1a1a;
+          background: #262626;
         }
-        
+
         .create-icon {
           font-size: 18px;
           font-weight: 300;
+          color: #22c55e;
         }
         
         .search-empty {

@@ -9,6 +9,7 @@ type QuickAddIntent = 'link' | 'note' | 'chat';
 interface QuickAddSubmitPayload {
   input: string;
   mode: QuickAddIntent;
+  description?: string;
 }
 
 interface QuickAddInputProps {
@@ -60,6 +61,7 @@ const MODE_CONFIG: Array<{
 
 export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddInputProps) {
   const [input, setInput] = useState('');
+  const [description, setDescription] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [manualMode, setManualMode] = useState<QuickAddIntent | null>(null);
@@ -108,8 +110,13 @@ export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddI
 
     setIsPosting(true);
     try {
-      await onSubmit({ input: input.trim(), mode: effectiveMode });
+      await onSubmit({
+        input: input.trim(),
+        mode: effectiveMode,
+        description: description.trim() || undefined
+      });
       setInput('');
+      setDescription('');
       setManualMode(null);
       setAutoMode('link');
       setIsExpanded(false);
@@ -165,6 +172,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddI
           e.currentTarget.style.background = 'transparent';
         }}
       >
+        CAPTURE
         <span style={{
           width: '22px',
           height: '22px',
@@ -177,7 +185,6 @@ export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddI
           fontSize: '14px',
           fontWeight: 700
         }}>+</span>
-        CAPTURE
       </button>
     );
   }
@@ -243,6 +250,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddI
           onClick={() => {
             setIsExpanded(false);
             setInput('');
+            setDescription('');
           }}
           style={{
             marginLeft: 'auto',
@@ -297,6 +305,51 @@ export default function QuickAddInput({ activeDelegations, onSubmit }: QuickAddI
             e.currentTarget.style.borderColor = '#1f1f1f';
           }}
         />
+      </div>
+
+      {/* Description field - optional */}
+      <div style={{ position: 'relative' }}>
+        <textarea
+          value={description}
+          onChange={(e) => {
+            if (e.target.value.length <= 280) {
+              setDescription(e.target.value);
+            }
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="This is a... (optional)"
+          disabled={isPosting || isSoftLimited}
+          style={{
+            width: '100%',
+            minHeight: '50px',
+            maxHeight: '100px',
+            padding: '10px 14px',
+            background: '#0a0a0a',
+            border: '1px solid #1f1f1f',
+            borderRadius: '8px',
+            color: '#a5a5a5',
+            fontSize: '13px',
+            fontFamily: 'inherit',
+            outline: 'none',
+            resize: 'none',
+            transition: 'border-color 0.15s ease'
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#333';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#1f1f1f';
+          }}
+        />
+        <span style={{
+          position: 'absolute',
+          bottom: '8px',
+          right: '10px',
+          fontSize: '10px',
+          color: description.length >= 260 ? '#f59e0b' : '#525252'
+        }}>
+          {description.length}/280
+        </span>
       </div>
 
       {/* Footer */}
