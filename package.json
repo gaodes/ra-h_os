@@ -43,6 +43,8 @@
     "pdfjs-dist": "^5.4.296",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.5.2",
     "uuid": "^11.1.0",
     "youtube-captions-scraper": "^2.0.3",
