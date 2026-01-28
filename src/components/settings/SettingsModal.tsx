@@ -7,7 +7,6 @@ import ToolsViewer from './ToolsViewer';
 import WorkflowsViewer from './WorkflowsViewer';
 import ApiKeysViewer from './ApiKeysViewer';
 import DatabaseViewer from './DatabaseViewer';
-import MapViewer from './MapViewer';
 import ExternalAgentsPanel from './ExternalAgentsPanel';
 import ContextViewer from './ContextViewer';
 import { apiKeyService } from '@/services/storage/apiKeys';
@@ -18,7 +17,6 @@ export type SettingsTab =
   | 'workflows'
   | 'apikeys'
   | 'database'
-  | 'map'
   | 'context'
   | 'agents';
 
@@ -198,20 +196,6 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               Context
             </div>
             <div
-              onClick={() => setActiveTab('map')}
-              style={{
-                padding: '12px 24px',
-                fontSize: '14px',
-                color: activeTab === 'map' ? '#fff' : '#888',
-                background: activeTab === 'map' ? '#1a3a2a' : 'transparent',
-                borderLeft: activeTab === 'map' ? '3px solid #22c55e' : '3px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              Map
-            </div>
-            <div
               onClick={() => setActiveTab('agents')}
               style={{
                 padding: '12px 24px',
@@ -315,7 +299,6 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
               {activeTab === 'apikeys' && 'API Keys'}
               {activeTab === 'database' && 'Knowledge Database'}
               {activeTab === 'context' && 'Auto-Context'}
-              {activeTab === 'map' && 'Knowledge Map'}
               {activeTab === 'agents' && 'External Agents'}
             </h2>
             <button
@@ -350,7 +333,6 @@ export default function SettingsModal({ isOpen, onClose, initialTab }: SettingsM
             {activeTab === 'apikeys' && <ApiKeysViewer />}
             {activeTab === 'database' && <DatabaseViewer />}
             {activeTab === 'context' && <ContextViewer />}
-            {activeTab === 'map' && <MapViewer />}
             {activeTab === 'agents' && <ExternalAgentsPanel />}
           </div>
         </div>

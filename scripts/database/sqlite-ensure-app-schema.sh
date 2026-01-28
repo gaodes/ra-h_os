@@ -264,20 +264,8 @@ CREATE INDEX IF NOT EXISTS idx_chat_memory_thread ON chat_memory_state(thread_id
 SQL
 fi
 
-echo "Ensuring agent_delegations table exists..."
-"$SQLITE_BIN" "$DB_PATH" <<'SQL'
-CREATE TABLE IF NOT EXISTS agent_delegations (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id TEXT UNIQUE NOT NULL,
-  task TEXT NOT NULL,
-  context TEXT,
-  expected_outcome TEXT,
-  status TEXT NOT NULL DEFAULT 'queued',
-  summary TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-SQL
+echo "Dropping legacy agent_delegations table if present..."
+"$SQLITE_BIN" "$DB_PATH" "DROP TABLE IF EXISTS agent_delegations;"
 
 if ! has_table node_dimensions; then
   "$SQLITE_BIN" "$DB_PATH" <<'SQL'
@@ -572,6 +560,12 @@ echo "Dropping helpers.fluid_context column if present (post-migration cleanup).
 if has_table helpers && has_col helpers fluid_context; then
   "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE helpers DROP COLUMN fluid_context;" || true
 fi
+
+echo "Ensuring performance indexes exist..."
+"$SQLITE_BIN" "$DB_PATH" <<'SQL'
+CREATE INDEX IF NOT EXISTS idx_nodes_updated_at ON nodes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chats_created_at ON chats(created_at DESC);
+SQL
 
 echo "Running VACUUM and ANALYZE..."
 "$SQLITE_BIN" "$DB_PATH" "VACUUM; ANALYZE;"

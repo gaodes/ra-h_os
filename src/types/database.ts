@@ -21,27 +21,6 @@ export interface Node {
   chunk_status?: 'not_chunked' | 'chunking' | 'chunked' | 'error' | null;
 }
 
-// Legacy Item interface - DEPRECATED, use Node instead
-// Kept temporarily for migration compatibility
-export interface Item extends Node {
-  // Legacy fields for backwards compatibility during transition
-  description?: string;
-  abstract?: string;
-  type?: string;
-  legacyType?: string[];
-  stage?: string;
-  segment?: string[];
-  tags?: string[];
-  sub_type?: any;
-  notes?: any;
-  extras?: any;
-  score?: number;
-  content_embedding?: number[];
-  embedding_updated_at?: string;
-  chunk_status?: 'not_chunked' | 'chunking' | 'chunked' | 'error';
-  chunk_updated_at?: string;
-}
-
 export interface Chunk {
   id: number;
   node_id: number;           // Updated from item_id to node_id
@@ -85,36 +64,6 @@ export interface EdgeContext {
   created_via: EdgeCreatedVia;
 }
 
-export interface Chat {
-  id: number;
-  user_message?: string;
-  assistant_message?: string;
-  thread_id: string;
-  focused_node_id?: number;  // Updated from focused_item_id
-  metadata?: any;
-  embedding?: number[];      // Renamed from content_embedding
-  created_at: string;
-}
-
-export interface SessionContext {
-  id: number;
-  session_id: string;
-  focused_node_id: number;   // Updated from focused_item_id
-  context_data: any;
-  created_at: string;
-  last_accessed: string;
-  expires_at: string;
-}
-
-export interface SessionCache {
-  id: number;
-  session_id: string;
-  cache_key: string;
-  cache_data: any;
-  expires_at: string;
-  created_at: string;
-}
-
 // New NodeFilters interface replacing rigid ItemFilters
 export interface NodeFilters {
   dimensions?: string[];      // Filter by dimensions (replaces stage/type filtering)
@@ -122,13 +71,6 @@ export interface NodeFilters {
   limit?: number;
   offset?: number;
   sortBy?: 'updated' | 'edges';  // Sort by updated_at or edge count
-}
-
-// Legacy filters - DEPRECATED, use NodeFilters instead
-export interface ItemFilters extends NodeFilters {
-  stage?: string;
-  type?: string;
-  tags?: string[];
 }
 
 export interface ChunkData {
@@ -158,37 +100,11 @@ export interface ChatData {
   embedding?: number[];      // Renamed from content_embedding
 }
 
-export interface CachedContext {
-  sessionId: string;
-  focusedNodeId: number;     // Updated from focusedItemId
-  contextData: any;
-  expiresAt: string;
-}
-
 // New NodeConnection interface
 export interface NodeConnection {
   id: number;
   connected_node: Node;      // Updated from connected_item
   edge: Edge;
-}
-
-// Legacy connection - DEPRECATED, use NodeConnection instead  
-export interface ItemConnection {
-  id: number;
-  connected_item: Item;
-  edge: Edge;
-}
-
-export interface DatabaseConfig {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
-  ssl?: boolean;
-  connectionTimeoutMillis?: number;
-  idleTimeoutMillis?: number;
-  max?: number;
 }
 
 export interface DatabaseError {
