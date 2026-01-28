@@ -1073,7 +1073,6 @@ export default function ThreePanelLayout() {
       <QuickAddInput
         isOpen={showAddStuff}
         onClose={() => setShowAddStuff(false)}
-        activeDelegations={delegations}
         onSubmit={handleQuickAddSubmit}
       />
     </div>

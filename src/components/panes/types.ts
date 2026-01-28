@@ -1,3 +1,4 @@
+import React from 'react';
 import { Node } from '@/types/database';
 import type { AgentDelegation } from '@/services/agents/delegation';
 
@@ -29,6 +30,7 @@ export interface BasePaneProps {
   onPaneAction?: (action: PaneAction) => void;
   onCollapse?: () => void;
   onSwapPanes?: () => void;
+  tabBar?: React.ReactNode;
 }
 
 // NodePane specific props
@@ -103,6 +105,7 @@ export interface PaneHeaderProps {
   slot?: 'A' | 'B';
   onCollapse?: () => void;
   onSwapPanes?: () => void;
+  tabBar?: React.ReactNode;
   children?: React.ReactNode;
 }
 

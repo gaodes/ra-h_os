@@ -1,18 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback, type CSSProperties } from 'react';
-import type { Edge, Node as DbNode } from '@/types/database';
+import {
+  ReactFlow,
+  Background,
+  useNodesState,
+  useEdgesState,
+  addEdge as rfAddEdge,
+  type Connection,
+  type NodeMouseHandler,
+  type Node as RFNode,
+  type Edge as RFEdge,
+  ReactFlowProvider,
+  useReactFlow,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+
+import type { Edge as DbEdge, Node as DbNode } from '@/types/database';
 import PaneHeader from './PaneHeader';
 import type { MapPaneProps } from './types';
 import { ChevronDown } from 'lucide-react';
 
-interface GraphNode extends DbNode {
-  edge_count?: number;
-  x: number;
-  y: number;
-  radius: number;
-  isExpanded?: boolean; // Node was dynamically loaded as a connection
-}
+import { RahNode } from './map/RahNode';
+import EdgeExplanationModal from './map/EdgeExplanationModal';
+import { toRFNodes, toRFEdges, NODE_LIMIT, type RahNodeData } from './map/utils';
+import './map/map-styles.css';
 
 interface DimensionInfo {
   dimension: string;
@@ -21,82 +33,101 @@ interface DimensionInfo {
   description: string | null;
 }
 
-const NODE_LIMIT = 200;
-const LABEL_THRESHOLD = 15;
+const nodeTypes = { rahNode: RahNode };
 
-export default function MapPane({
+// Debounce helper
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
+  let timer: ReturnType<typeof setTimeout>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((...args: any[]) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  }) as T;
+}
+
+function MapPaneInner({
   slot,
   isActive,
   onPaneAction,
   onCollapse,
   onSwapPanes,
+  tabBar,
   onNodeClick,
   activeTabId,
 }: MapPaneProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
-  const [baseNodes, setBaseNodes] = useState<DbNode[]>([]); // Nodes from dimension filter
-  const [expandedNodes, setExpandedNodes] = useState<DbNode[]>([]); // Connected nodes loaded dynamically
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const reactFlowInstance = useReactFlow();
+
+  // --- Data state (DB-level) ---
+  const [baseNodes, setBaseNodes] = useState<DbNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<DbNode[]>([]);
+  const [dbEdges, setDbEdges] = useState<DbEdge[]>([]);
   const [lockedDimensions, setLockedDimensions] = useState<DimensionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedNode, setSelectedNode] = useState<DbNode | null>(null);
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
 
-  // Dimension filter state
+  // --- UI state ---
+  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [selectedDimension, setSelectedDimension] = useState<string | null>(null);
   const [dimensionDropdownOpen, setDimensionDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Combine base nodes + expanded nodes
-  const allNodes = useMemo(() => {
-    const baseNodeIds = new Set(baseNodes.map(n => n.id));
-    // Add expanded nodes that aren't already in base nodes
-    const uniqueExpanded = expandedNodes.filter(n => !baseNodeIds.has(n.id));
-    return [...baseNodes, ...uniqueExpanded];
+  // --- React Flow state ---
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode<RahNodeData>>([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<RFEdge>([]);
+
+  // --- Edge creation modal ---
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
+
+  // Track current RF positions so we can preserve them across data refreshes
+  const rfPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+  // Combine base + expanded
+  const allDbNodes = useMemo(() => {
+    const baseIds = new Set(baseNodes.map(n => n.id));
+    return [...baseNodes, ...expandedNodes.filter(n => !baseIds.has(n.id))];
   }, [baseNodes, expandedNodes]);
 
-  // Close dropdown when clicking outside
+  // Selected DB node
+  const selectedDbNode = useMemo(
+    () => allDbNodes.find(n => n.id === selectedNodeId) ?? null,
+    [allDbNodes, selectedNodeId],
+  );
+
+  // Connected node IDs for info panel
+  const connectedNodeIds = useMemo(() => {
+    if (!selectedNodeId) return new Set<number>();
+    const connected = new Set<number>();
+    dbEdges.forEach(e => {
+      if (e.from_node_id === selectedNodeId) connected.add(e.to_node_id);
+      if (e.to_node_id === selectedNodeId) connected.add(e.from_node_id);
+    });
+    return connected;
+  }, [selectedNodeId, dbEdges]);
+
+  const lockedDimensionNames = useMemo(
+    () => new Set(lockedDimensions.map(d => d.dimension)),
+    [lockedDimensions],
+  );
+
+  // ----- Close dropdown on outside click -----
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as HTMLElement)) {
+    if (!dimensionDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as HTMLElement)) {
         setDimensionDropdownOpen(false);
       }
     };
-
-    if (dimensionDropdownOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, [dimensionDropdownOpen]);
 
-  // Resize observer
-  useEffect(() => {
-    const observer = new ResizeObserver(entries => {
-      const entry = entries[0];
-      if (entry?.contentRect) {
-        setContainerSize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height,
-        });
-      }
-    });
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  // Fetch base data (dimension-filtered nodes)
+  // ----- Fetch base data -----
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        // Build nodes URL with optional dimension filter
         const nodesUrl = selectedDimension
           ? `/api/nodes?limit=${NODE_LIMIT}&sortBy=edges&dimensions=${encodeURIComponent(selectedDimension)}`
           : `/api/nodes?limit=${NODE_LIMIT}&sortBy=edges`;
@@ -107,25 +138,23 @@ export default function MapPane({
           fetch('/api/dimensions/popular'),
         ]);
 
-        if (!nodesRes.ok || !edgesRes.ok) {
-          throw new Error('Failed to load data');
-        }
+        if (!nodesRes.ok || !edgesRes.ok) throw new Error('Failed to load data');
 
         const nodesPayload = await nodesRes.json();
         const edgesPayload = await edgesRes.json();
 
         setBaseNodes(nodesPayload.data || []);
-        setEdges(edgesPayload.data || []);
-        setExpandedNodes([]); // Clear expanded nodes when filter changes
-        setSelectedNode(null); // Clear selection when filter changes
+        setDbEdges(edgesPayload.data || []);
+        setExpandedNodes([]);
+        setSelectedNodeId(null);
+        rfPositionsRef.current.clear();
 
-        // Get locked (priority) dimensions
         if (dimsRes.ok) {
           const dimsPayload = await dimsRes.json();
           if (dimsPayload.success && dimsPayload.data) {
-            const locked = (dimsPayload.data as DimensionInfo[])
-              .filter((d) => d.isPriority);
-            setLockedDimensions(locked);
+            setLockedDimensions(
+              (dimsPayload.data as DimensionInfo[]).filter(d => d.isPriority),
+            );
           }
         }
       } catch (err) {
@@ -134,310 +163,318 @@ export default function MapPane({
         setLoading(false);
       }
     };
-
     fetchData();
   }, [selectedDimension]);
 
-  // Fetch edges and connected nodes when a node is selected
+  // ----- Sync DB data → React Flow nodes/edges -----
+  useEffect(() => {
+    if (allDbNodes.length === 0) {
+      setRfNodes([]);
+      setRfEdges([]);
+      return;
+    }
+
+    // Capture current RF positions before rebuild
+    rfNodes.forEach(n => {
+      rfPositionsRef.current.set(n.id, n.position);
+    });
+
+    const centerX = 600;
+    const centerY = 400;
+
+    const newRfNodes = toRFNodes(
+      baseNodes,
+      expandedNodes,
+      centerX,
+      centerY,
+      selectedNodeId,
+      connectedNodeIds,
+      rfPositionsRef.current,
+    );
+
+    const nodeIdSet = new Set(newRfNodes.map(n => n.id));
+    const newRfEdges = toRFEdges(dbEdges, nodeIdSet, selectedNodeId);
+
+    setRfNodes(newRfNodes);
+    setRfEdges(newRfEdges);
+  }, [allDbNodes, baseNodes, expandedNodes, dbEdges, selectedNodeId, connectedNodeIds]);
+
+  // ----- Node traversal: fetch connected nodes -----
   const fetchConnectedNodes = useCallback(async (nodeId: number) => {
     try {
-      // First, fetch edges for this specific node (in case we don't have them)
       const edgesRes = await fetch(`/api/nodes/${nodeId}/edges`);
-      let nodeEdges: Edge[] = [];
+      let nodeEdges: DbEdge[] = [];
 
       if (edgesRes.ok) {
         const edgesData = await edgesRes.json();
         nodeEdges = edgesData.data || [];
 
-        // Add new edges to our edges state
         if (nodeEdges.length > 0) {
-          setEdges(prev => {
-            const existingEdgeIds = new Set(prev.map(e => e.id));
-            const newEdges = nodeEdges.filter(e => !existingEdgeIds.has(e.id));
-            if (newEdges.length > 0) {
-              return [...prev, ...newEdges];
-            }
-            return prev;
+          setDbEdges(prev => {
+            const existing = new Set(prev.map(e => e.id));
+            const fresh = nodeEdges.filter(e => !existing.has(e.id));
+            return fresh.length > 0 ? [...prev, ...fresh] : prev;
           });
         }
       }
 
-      // Get connected node IDs from both existing edges and newly fetched edges
+      // Find missing connected node IDs
       const connectedIds = new Set<number>();
-
-      // From existing edges
-      edges.forEach(edge => {
-        if (edge.from_node_id === nodeId) connectedIds.add(edge.to_node_id);
-        if (edge.to_node_id === nodeId) connectedIds.add(edge.from_node_id);
+      dbEdges.forEach(e => {
+        if (e.from_node_id === nodeId) connectedIds.add(e.to_node_id);
+        if (e.to_node_id === nodeId) connectedIds.add(e.from_node_id);
+      });
+      nodeEdges.forEach(e => {
+        if (e.from_node_id === nodeId) connectedIds.add(e.to_node_id);
+        if (e.to_node_id === nodeId) connectedIds.add(e.from_node_id);
       });
 
-      // From newly fetched edges
-      nodeEdges.forEach(edge => {
-        if (edge.from_node_id === nodeId) connectedIds.add(edge.to_node_id);
-        if (edge.to_node_id === nodeId) connectedIds.add(edge.from_node_id);
-      });
-
-      // Find which connected nodes we don't have yet
-      const existingIds = new Set(allNodes.map(n => n.id));
+      const existingIds = new Set(allDbNodes.map(n => n.id));
       const missingIds = Array.from(connectedIds).filter(id => !existingIds.has(id));
-
       if (missingIds.length === 0) return;
 
-      // Fetch missing nodes
-      const fetchPromises = missingIds.slice(0, 50).map(async (id) => { // Limit to 50 to prevent overload
-        try {
-          const res = await fetch(`/api/nodes/${id}`);
-          if (res.ok) {
-            const data = await res.json();
-            return data.node as DbNode;
-          }
-        } catch {
-          // Ignore individual fetch errors
-        }
-        return null;
-      });
+      const fetched = (
+        await Promise.all(
+          missingIds.slice(0, 50).map(async id => {
+            try {
+              const res = await fetch(`/api/nodes/${id}`);
+              if (res.ok) {
+                const data = await res.json();
+                return data.node as DbNode;
+              }
+            } catch { /* ignore */ }
+            return null;
+          }),
+        )
+      ).filter((n): n is DbNode => n !== null);
 
-      const fetchedNodes = (await Promise.all(fetchPromises)).filter((n): n is DbNode => n !== null);
-
-      if (fetchedNodes.length > 0) {
+      if (fetched.length > 0) {
         setExpandedNodes(prev => {
-          const existingExpandedIds = new Set(prev.map(n => n.id));
-          const newNodes = fetchedNodes.filter(n => !existingExpandedIds.has(n.id));
-          return [...prev, ...newNodes];
+          const ids = new Set(prev.map(n => n.id));
+          const fresh = fetched.filter(n => !ids.has(n.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
         });
       }
     } catch (err) {
       console.error('Failed to fetch connected nodes:', err);
     }
-  }, [edges, allNodes]);
+  }, [dbEdges, allDbNodes]);
 
-  // When selection changes, fetch connected nodes
   useEffect(() => {
-    if (selectedNode) {
-      fetchConnectedNodes(selectedNode.id);
-    }
-  }, [selectedNode, fetchConnectedNodes]);
+    if (selectedNodeId) fetchConnectedNodes(selectedNodeId);
+  }, [selectedNodeId, fetchConnectedNodes]);
 
-  // Sync with focused node from other panes (focused node awareness)
+  // ----- Focused node awareness -----
   useEffect(() => {
     if (!activeTabId) return;
-
-    // Check if this node is already in our nodes
-    const existingNode = allNodes.find(n => n.id === activeTabId);
-
-    if (existingNode) {
-      // Node is visible, just select it
-      setSelectedNode(existingNode);
+    const existing = allDbNodes.find(n => n.id === activeTabId);
+    if (existing) {
+      setSelectedNodeId(activeTabId);
+      // Pan + zoom closer to the focused node
+      const rfNode = rfNodes.find(n => n.id === String(activeTabId));
+      if (rfNode) {
+        reactFlowInstance.setCenter(rfNode.position.x, rfNode.position.y, { duration: 400, zoom: 1.5 });
+      }
     } else {
-      // Node not in current view - fetch it and add as expanded
-      const fetchFocusedNode = async () => {
+      (async () => {
         try {
           const res = await fetch(`/api/nodes/${activeTabId}`);
           if (res.ok) {
             const data = await res.json();
             const node = data.node as DbNode;
             if (node) {
-              // Add to expanded nodes
-              setExpandedNodes(prev => {
-                if (prev.some(n => n.id === node.id)) return prev;
-                return [...prev, node];
-              });
-              // Select it
-              setSelectedNode(node);
+              setExpandedNodes(prev => prev.some(n => n.id === node.id) ? prev : [...prev, node]);
+              setSelectedNodeId(node.id);
+              // After the next render cycle, zoom to the newly added node
+              setTimeout(() => {
+                reactFlowInstance.setCenter(600, 400, { duration: 400, zoom: 1.5 });
+              }, 100);
             }
           }
         } catch (err) {
           console.error('Failed to fetch focused node:', err);
         }
+      })();
+    }
+  }, [activeTabId]);
+
+  // ----- SSE real-time sync -----
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+
+          switch (payload.type) {
+            case 'NODE_UPDATED': {
+              const node = payload.data?.node as DbNode | undefined;
+              if (node?.id) {
+                const updater = (prev: DbNode[]) =>
+                  prev.map(n => n.id === node.id ? { ...n, ...node } : n);
+                setBaseNodes(updater);
+                setExpandedNodes(updater);
+              }
+              break;
+            }
+            case 'NODE_DELETED': {
+              const deletedId = payload.data?.nodeId;
+              if (deletedId) {
+                setBaseNodes(prev => prev.filter(n => n.id !== deletedId));
+                setExpandedNodes(prev => prev.filter(n => n.id !== deletedId));
+                setDbEdges(prev => prev.filter(e => e.from_node_id !== deletedId && e.to_node_id !== deletedId));
+                setSelectedNodeId(prev => prev === deletedId ? null : prev);
+              }
+              break;
+            }
+            case 'NODE_CREATED': {
+              // If filtering by dimension and new node matches, could add it
+              // For now, just note it happened — user can refresh
+              break;
+            }
+            case 'EDGE_CREATED': {
+              const edge = payload.data?.edge as DbEdge | undefined;
+              if (edge?.id) {
+                setDbEdges(prev => {
+                  if (prev.some(e => e.id === edge.id)) return prev;
+                  return [...prev, edge];
+                });
+              }
+              break;
+            }
+            case 'EDGE_DELETED': {
+              const edgeId = payload.data?.edgeId;
+              if (edgeId) {
+                setDbEdges(prev => prev.filter(e => e.id !== edgeId));
+              }
+              break;
+            }
+          }
+        } catch {
+          // Ignore parse errors (keep-alive pings, etc.)
+        }
       };
-      fetchFocusedNode();
+
+      eventSource.onerror = () => {
+        // EventSource auto-reconnects, just log
+        console.error('Map SSE connection error');
+      };
+    } catch {
+      console.error('Failed to establish Map SSE connection');
     }
-  }, [activeTabId, allNodes]);
 
-  // Position nodes in a cluster layout
-  const graphNodes = useMemo<GraphNode[]>(() => {
-    if (allNodes.length === 0) return [];
+    return () => {
+      eventSource?.close();
+    };
+  }, []);
 
-    const { width, height } = containerSize;
-    const centerX = width / 2;
-    const centerY = height / 2;
+  // ----- Node drag → save position to metadata (debounced) -----
+  const savePositionRef = useRef(
+    debounce(async (nodeId: number, x: number, y: number) => {
+      try {
+        const res = await fetch(`/api/nodes/${nodeId}`);
+        if (!res.ok) return;
+        const { node: existing } = await res.json();
+        const existingMetadata = existing?.metadata ?? {};
+        const mergedMeta = typeof existingMetadata === 'string'
+          ? (() => { try { return JSON.parse(existingMetadata); } catch { return {}; } })()
+          : existingMetadata;
 
-    // Separate base nodes and expanded nodes
-    const baseNodeIds = new Set(baseNodes.map(n => n.id));
-
-    // Sort base nodes by edge count
-    const sortedBase = [...baseNodes].sort((a, b) => (b.edge_count ?? 0) - (a.edge_count ?? 0));
-    const maxEdges = Math.max(...sortedBase.map(n => n.edge_count ?? 0), 1);
-
-    // Position base nodes using spiral layout
-    const positioned: GraphNode[] = sortedBase.map((node, index) => {
-      const edgeCount = node.edge_count ?? 0;
-      const edgeRatio = edgeCount / maxEdges;
-
-      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-      const angle = index * goldenAngle;
-
-      const isLabeled = index < LABEL_THRESHOLD;
-      const labelSpacing = isLabeled ? 60 : 0;
-      const baseDistance = 80 + labelSpacing + (1 - edgeRatio) * Math.min(width, height) * 0.35;
-      const distance = baseDistance + (index * 4);
-
-      const x = centerX + Math.cos(angle) * distance;
-      const y = centerY + Math.sin(angle) * distance;
-
-      const minRadius = 3;
-      const maxRadius = 18;
-      const radius = minRadius + edgeRatio * (maxRadius - minRadius);
-
-      return { ...node, x, y, radius, isExpanded: false };
-    });
-
-    // Track positioned node IDs for quick lookup
-    const positionedMap = new Map<number, GraphNode>();
-    positioned.forEach(n => positionedMap.set(n.id, n));
-
-    // Position expanded nodes
-    if (selectedNode) {
-      // Find the selected node's position (could be in base or already expanded)
-      let selectedGraphNode = positionedMap.get(selectedNode.id);
-
-      // If selected node is an expanded node not yet positioned, position it first
-      if (!selectedGraphNode && !baseNodeIds.has(selectedNode.id)) {
-        // Position the selected expanded node at a reasonable location
-        // Use the center or find a reference point
-        const selectedExpanded: GraphNode = {
-          ...selectedNode,
-          x: centerX,
-          y: centerY,
-          radius: 10,
-          isExpanded: true,
-        };
-        positioned.push(selectedExpanded);
-        positionedMap.set(selectedNode.id, selectedExpanded);
-        selectedGraphNode = selectedExpanded;
-      }
-
-      if (selectedGraphNode) {
-        // Get all expanded nodes that need positioning (not in base and not already positioned)
-        const expandedToPosition = expandedNodes.filter(n =>
-          !baseNodeIds.has(n.id) && !positionedMap.has(n.id)
-        );
-
-        expandedToPosition.forEach((node, index) => {
-          // Position in a circle around the selected node
-          const angle = (index / Math.max(expandedToPosition.length, 1)) * Math.PI * 2;
-          const distance = 120 + (index % 3) * 30; // Vary distance slightly
-
-          const x = selectedGraphNode!.x + Math.cos(angle) * distance;
-          const y = selectedGraphNode!.y + Math.sin(angle) * distance;
-
-          const newNode: GraphNode = {
-            ...node,
-            x,
-            y,
-            radius: 8, // Fixed smaller radius for expanded nodes
-            isExpanded: true,
-          };
-          positioned.push(newNode);
-          positionedMap.set(node.id, newNode);
+        await fetch(`/api/nodes/${nodeId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            metadata: { ...mergedMeta, map_position: { x, y } },
+          }),
         });
+      } catch (err) {
+        console.error('Failed to save node position:', err);
       }
-    }
-
-    return positioned;
-  }, [allNodes, baseNodes, expandedNodes, containerSize, selectedNode]);
-
-  // Get edges between visible nodes
-  const graphEdges = useMemo(() => {
-    if (graphNodes.length === 0 || edges.length === 0) return [];
-
-    const nodeMap = new Map<number, GraphNode>();
-    graphNodes.forEach(node => nodeMap.set(node.id, node));
-
-    return edges
-      .map(edge => {
-        const source = nodeMap.get(edge.from_node_id);
-        const target = nodeMap.get(edge.to_node_id);
-        if (!source || !target) return null;
-        return { id: edge.id, source, target };
-      })
-      .filter(Boolean) as Array<{ id: number; source: GraphNode; target: GraphNode }>;
-  }, [edges, graphNodes]);
-
-  // Get connected node IDs for selected node
-  const connectedNodeIds = useMemo(() => {
-    if (!selectedNode) return new Set<number>();
-    const connected = new Set<number>();
-    edges.forEach(edge => {
-      if (edge.from_node_id === selectedNode.id) connected.add(edge.to_node_id);
-      if (edge.to_node_id === selectedNode.id) connected.add(edge.from_node_id);
-    });
-    return connected;
-  }, [selectedNode, edges]);
-
-  // Set of locked dimension names for styling
-  const lockedDimensionNames = useMemo(() =>
-    new Set(lockedDimensions.map(d => d.dimension)),
-    [lockedDimensions]
+    }, 400),
   );
 
-  // Pan handling
-  const handlePanStart = (event: React.PointerEvent<SVGRectElement>) => {
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const originX = transform.x;
-    const originY = transform.y;
-
-    const handleMove = (moveEvent: PointerEvent) => {
-      setTransform(prev => ({
-        ...prev,
-        x: originX + (moveEvent.clientX - startX),
-        y: originY + (moveEvent.clientY - startY),
-      }));
-    };
-
-    const handleUp = () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-  };
-
-  const handleZoom = (direction: 'in' | 'out' | 'reset') => {
-    if (direction === 'reset') {
-      setTransform({ x: 0, y: 0, scale: 1 });
-      return;
+  const onNodeDragStop: NodeMouseHandler<RFNode<RahNodeData>> = useCallback((_event, node) => {
+    const nodeId = parseInt(node.id);
+    if (!isNaN(nodeId)) {
+      rfPositionsRef.current.set(node.id, node.position);
+      savePositionRef.current(nodeId, node.position.x, node.position.y);
     }
-    setTransform(prev => ({
-      ...prev,
-      scale: direction === 'in'
-        ? Math.min(prev.scale + 0.2, 3)
-        : Math.max(prev.scale - 0.2, 0.5),
-    }));
-  };
+  }, []);
 
-  // Handle node click - supports traversal
-  const handleNodeClick = (node: GraphNode) => {
-    const isCurrentlySelected = selectedNode?.id === node.id;
+  // ----- Node click → select + traverse -----
+  const onNodeClickHandler: NodeMouseHandler<RFNode<RahNodeData>> = useCallback((_event, node) => {
+    const nodeId = parseInt(node.id);
+    if (isNaN(nodeId)) return;
+    setSelectedNodeId(prev => prev === nodeId ? null : nodeId);
+  }, []);
 
-    if (isCurrentlySelected) {
-      // Clicking selected node deselects it
-      setSelectedNode(null);
-    } else {
-      // Select this node - will trigger fetch of its connections
-      setSelectedNode(node);
+  // ----- Node double-click → open in other pane -----
+  const onNodeDoubleClick: NodeMouseHandler<RFNode<RahNodeData>> = useCallback((_event, node) => {
+    const nodeId = parseInt(node.id);
+    if (!isNaN(nodeId)) onNodeClick?.(nodeId);
+  }, [onNodeClick]);
+
+  // ----- Edge creation via drag -----
+  const onConnect = useCallback((connection: Connection) => {
+    if (connection.source === connection.target) return; // No self-connections
+    setPendingConnection(connection);
+  }, []);
+
+  const handleEdgeCreate = useCallback(async (explanation: string) => {
+    if (!pendingConnection?.source || !pendingConnection?.target) return;
+
+    const fromId = parseInt(pendingConnection.source);
+    const toId = parseInt(pendingConnection.target);
+
+    try {
+      const res = await fetch('/api/edges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from_node_id: fromId,
+          to_node_id: toId,
+          source: 'user',
+          explanation,
+          created_via: 'ui',
+        }),
+      });
+
+      if (res.ok) {
+        const payload = await res.json();
+        const edge = payload.data;
+        if (edge?.id) {
+          // Add to DB edges (SSE may also add it, dedup in handler)
+          setDbEdges(prev => {
+            if (prev.some(e => e.id === edge.id)) return prev;
+            return [...prev, edge];
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to create edge:', err);
     }
-  };
 
-  const handlePaneTypeChange = (type: typeof slot extends 'A' | 'B' ? import('./types').PaneType : never) => {
-    onPaneAction?.({ type: 'switch-pane-type', paneType: type });
-  };
+    setPendingConnection(null);
+  }, [pendingConnection]);
+
+  const handleEdgeCancel = useCallback(() => {
+    setPendingConnection(null);
+  }, []);
+
+  // Get source/target titles for modal
+  const pendingSourceTitle = pendingConnection?.source
+    ? allDbNodes.find(n => n.id === parseInt(pendingConnection.source!))?.title || 'Unknown'
+    : '';
+  const pendingTargetTitle = pendingConnection?.target
+    ? allDbNodes.find(n => n.id === parseInt(pendingConnection.target!))?.title || 'Unknown'
+    : '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'transparent', overflow: 'hidden' }}>
-      <PaneHeader slot={slot} onCollapse={onCollapse} onSwapPanes={onSwapPanes}>
+      <PaneHeader slot={slot} onCollapse={onCollapse} onSwapPanes={onSwapPanes} tabBar={tabBar}>
         {/* Dimension filter dropdown */}
         <div ref={dropdownRef} style={{ position: 'relative' }}>
           <button
@@ -480,59 +517,38 @@ export default function MapPane({
               zIndex: 1000,
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             }}>
-              {/* All dimensions option */}
               <button
-                onClick={() => {
-                  setSelectedDimension(null);
-                  setDimensionDropdownOpen(false);
-                }}
+                onClick={() => { setSelectedDimension(null); setDimensionDropdownOpen(false); }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '8px 12px',
+                  display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px',
                   background: !selectedDimension ? '#2a2a2a' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
+                  border: 'none', borderRadius: '4px',
                   color: !selectedDimension ? '#fff' : '#888',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.1s ease',
-                  textAlign: 'left',
+                  fontSize: '12px', cursor: 'pointer', textAlign: 'left',
                 }}
               >
                 All dimensions
-                {!selectedDimension && <span style={{ marginLeft: 'auto', color: '#22c55e' }}>✓</span>}
+                {!selectedDimension && <span style={{ marginLeft: 'auto', color: '#22c55e' }}>&#10003;</span>}
               </button>
 
-              {lockedDimensions.map((dim) => (
+              {lockedDimensions.map(dim => (
                 <button
                   key={dim.dimension}
-                  onClick={() => {
-                    setSelectedDimension(dim.dimension);
-                    setDimensionDropdownOpen(false);
-                  }}
+                  onClick={() => { setSelectedDimension(dim.dimension); setDimensionDropdownOpen(false); }}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    width: '100%',
-                    padding: '8px 12px',
+                    display: 'flex', alignItems: 'center', width: '100%', padding: '8px 12px',
                     background: selectedDimension === dim.dimension ? '#2a2a2a' : 'transparent',
-                    border: 'none',
-                    borderRadius: '4px',
+                    border: 'none', borderRadius: '4px',
                     color: selectedDimension === dim.dimension ? '#fff' : '#888',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    transition: 'all 0.1s ease',
-                    textAlign: 'left',
+                    fontSize: '12px', cursor: 'pointer', textAlign: 'left',
                   }}
-                  onMouseEnter={(e) => {
+                  onMouseEnter={e => {
                     if (selectedDimension !== dim.dimension) {
                       e.currentTarget.style.background = '#222';
                       e.currentTarget.style.color = '#ccc';
                     }
                   }}
-                  onMouseLeave={(e) => {
+                  onMouseLeave={e => {
                     if (selectedDimension !== dim.dimension) {
                       e.currentTarget.style.background = 'transparent';
                       e.currentTarget.style.color = '#888';
@@ -540,7 +556,7 @@ export default function MapPane({
                   }}
                 >
                   {dim.dimension}
-                  {selectedDimension === dim.dimension && <span style={{ marginLeft: 'auto', color: '#22c55e' }}>✓</span>}
+                  {selectedDimension === dim.dimension && <span style={{ marginLeft: 'auto', color: '#22c55e' }}>&#10003;</span>}
                 </button>
               ))}
             </div>
@@ -549,7 +565,7 @@ export default function MapPane({
       </PaneHeader>
 
       {/* Map content */}
-      <div ref={containerRef} style={{ position: 'relative', flex: 1, background: '#080808' }}>
+      <div style={{ position: 'relative', flex: 1, background: '#080808' }}>
         {loading ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
             Loading map...
@@ -558,48 +574,60 @@ export default function MapPane({
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
             {error}
           </div>
-        ) : graphNodes.length === 0 ? (
+        ) : rfNodes.length === 0 ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
             No nodes to display
           </div>
         ) : (
-          <>
-            {/* Zoom controls */}
-            <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 10 }}>
-              <button onClick={() => handleZoom('in')} style={controlBtn} title="Zoom in">+</button>
-              <button onClick={() => handleZoom('out')} style={controlBtn} title="Zoom out">−</button>
-              <button onClick={() => handleZoom('reset')} style={controlBtn} title="Reset">⟳</button>
-            </div>
+          <div className="rah-map-wrapper" style={{ width: '100%', height: '100%' }}>
+            <ReactFlow
+              nodes={rfNodes}
+              edges={rfEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeClick={onNodeClickHandler}
+              onNodeDoubleClick={onNodeDoubleClick}
+              onNodeDragStop={onNodeDragStop}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              minZoom={0.1}
+              maxZoom={3}
+              defaultEdgeOptions={{ type: 'default' }}
+              proOptions={{ hideAttribution: true }}
+              colorMode="dark"
+            >
+              <Background color="#1a1a1a" gap={40} size={1} />
+            </ReactFlow>
 
-            {/* Selected node info */}
-            {selectedNode && (
+            {/* Selected node info panel */}
+            {selectedDbNode && (
               <div style={infoPanel}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 8 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {selectedNode.title || 'Untitled'}
+                  <div style={{ fontWeight: 600, fontSize: 14, color: '#e5e7eb' }}>
+                    {selectedDbNode.title || 'Untitled'}
                   </div>
                   <button
-                    onClick={() => setSelectedNode(null)}
-                    style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 16 }}
+                    onClick={() => setSelectedNodeId(null)}
+                    style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
                   >
-                    ×
+                    &times;
                   </button>
                 </div>
                 <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
                   {connectedNodeIds.size} connected nodes
                 </div>
                 <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 8 }}>
-                  Click a connected node to traverse
+                  Click a connected node to traverse &middot; Double-click to open
                 </div>
-                {selectedNode.dimensions && selectedNode.dimensions.length > 0 && (
+                {selectedDbNode.dimensions && selectedDbNode.dimensions.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                    {selectedNode.dimensions.slice(0, 5).map(dim => (
+                    {selectedDbNode.dimensions.slice(0, 5).map(dim => (
                       <span
                         key={dim}
                         style={{
-                          padding: '2px 8px',
-                          borderRadius: 999,
-                          fontSize: 11,
+                          padding: '2px 8px', borderRadius: 999, fontSize: 11,
                           background: lockedDimensionNames.has(dim) ? '#132018' : '#1a1a1a',
                           color: lockedDimensionNames.has(dim) ? '#86efac' : '#888',
                         }}
@@ -609,174 +637,43 @@ export default function MapPane({
                     ))}
                   </div>
                 )}
-                {/* Open node button */}
                 <button
-                  onClick={() => onNodeClick?.(selectedNode.id)}
+                  onClick={() => onNodeClick?.(selectedDbNode.id)}
                   style={{
-                    marginTop: 4,
-                    padding: '8px 12px',
-                    background: '#22c55e',
-                    color: '#052e16',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    width: '100%',
+                    marginTop: 4, padding: '8px 12px', background: '#22c55e', color: '#052e16',
+                    border: 'none', borderRadius: '6px', fontSize: 12, fontWeight: 500,
+                    cursor: 'pointer', width: '100%',
                   }}
                 >
                   Open Node
                 </button>
               </div>
             )}
-
-            {/* SVG Graph */}
-            <svg width="100%" height="100%" style={{ display: 'block' }}>
-              <defs />
-              <rect
-                width="100%"
-                height="100%"
-                fill="transparent"
-                style={{ cursor: 'grab' }}
-                onPointerDown={handlePanStart}
-              />
-              <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>
-                {/* Edges */}
-                {graphEdges.map(edge => {
-                  const isConnected = selectedNode && (
-                    edge.source.id === selectedNode.id || edge.target.id === selectedNode.id
-                  );
-                  return (
-                    <line
-                      key={edge.id}
-                      x1={edge.source.x}
-                      y1={edge.source.y}
-                      x2={edge.target.x}
-                      y2={edge.target.y}
-                      stroke={isConnected ? '#22c55e' : '#374151'}
-                      strokeWidth={isConnected ? 1.5 : 0.75}
-                      strokeOpacity={selectedNode ? (isConnected ? 0.9 : 0.15) : 0.6}
-                    />
-                  );
-                })}
-
-                {/* Nodes */}
-                {graphNodes.map((node, index) => {
-                  const isBaseNode = !node.isExpanded;
-                  const isTop = isBaseNode && index < LABEL_THRESHOLD;
-                  const isSelected = selectedNode?.id === node.id;
-                  const isConnectedToSelected = connectedNodeIds.has(node.id);
-                  const isDimmed = selectedNode && !isSelected && !isConnectedToSelected;
-
-                  return (
-                    <g
-                      key={node.id}
-                      onClick={() => handleNodeClick(node)}
-                      style={{ cursor: 'pointer' }}
-                      opacity={isDimmed ? 0.25 : 1}
-                    >
-                      {/* Highlight ring for connected nodes */}
-                      {isConnectedToSelected && !isSelected && (
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r={node.radius + 4}
-                          fill="none"
-                          stroke="#22c55e"
-                          strokeWidth={2}
-                          strokeOpacity={0.6}
-                        />
-                      )}
-                      {/* Node circle */}
-                      <circle
-                        cx={node.x}
-                        cy={node.y}
-                        r={node.radius}
-                        fill={node.isExpanded ? '#f59e0b' : (isTop ? '#22c55e' : '#334155')}
-                        fillOpacity={node.isExpanded ? 0.7 : (isTop ? 0.6 : 0.4)}
-                        stroke={isSelected ? '#fff' : (node.isExpanded ? '#b45309' : (isTop ? '#166534' : '#1e293b'))}
-                        strokeWidth={isSelected ? 2 : (isTop ? 1.5 : 0.5)}
-                      />
-
-                      {/* Label for top base nodes OR expanded nodes */}
-                      {(isTop || node.isExpanded) && (
-                        <>
-                          <text
-                            x={node.x}
-                            y={node.y + node.radius + 14}
-                            textAnchor="middle"
-                            fill={node.isExpanded ? '#fbbf24' : '#e5e7eb'}
-                            fontSize={node.isExpanded ? 10 : 11}
-                            fontWeight={500}
-                          >
-                            {(node.title || 'Untitled').slice(0, 20)}
-                            {(node.title?.length ?? 0) > 20 ? '…' : ''}
-                          </text>
-
-                          {!node.isExpanded && node.dimensions && node.dimensions.length > 0 && (() => {
-                            const dims = node.dimensions.slice(0, 3).map(d => d.length > 10 ? d.slice(0, 9) + '…' : d).join('  ·  ');
-                            const labelWidth = dims.length * 5 + 16;
-                            return (
-                              <g>
-                                <rect
-                                  x={node.x - labelWidth / 2}
-                                  y={node.y + node.radius + 18}
-                                  width={labelWidth}
-                                  height={16}
-                                  rx={8}
-                                  fill="#141414"
-                                  stroke="#262626"
-                                  strokeWidth={0.5}
-                                />
-                                <text
-                                  x={node.x}
-                                  y={node.y + node.radius + 29}
-                                  textAnchor="middle"
-                                  fill="#a1a1aa"
-                                  fontSize={9}
-                                >
-                                  {dims}
-                                </text>
-                              </g>
-                            );
-                          })()}
-
-                          {/* Show dimension for expanded nodes */}
-                          {node.isExpanded && node.dimensions && node.dimensions.length > 0 && (
-                            <text
-                              x={node.x}
-                              y={node.y + node.radius + 24}
-                              textAnchor="middle"
-                              fill="#a1a1aa"
-                              fontSize={9}
-                            >
-                              {node.dimensions[0]}
-                            </text>
-                          )}
-                        </>
-                      )}
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
-          </>
+          </div>
         )}
       </div>
+
+      {/* Edge creation explanation modal */}
+      {pendingConnection && (
+        <EdgeExplanationModal
+          sourceTitle={pendingSourceTitle}
+          targetTitle={pendingTargetTitle}
+          onSubmit={handleEdgeCreate}
+          onCancel={handleEdgeCancel}
+        />
+      )}
     </div>
   );
 }
 
-const controlBtn: CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 6,
-  border: '1px solid #262626',
-  background: '#141414',
-  color: '#888',
-  fontSize: 16,
-  cursor: 'pointer',
-};
+// Wrap with ReactFlowProvider
+export default function MapPane(props: MapPaneProps) {
+  return (
+    <ReactFlowProvider>
+      <MapPaneInner {...props} />
+    </ReactFlowProvider>
+  );
+}
 
 const infoPanel: CSSProperties = {
   position: 'absolute',

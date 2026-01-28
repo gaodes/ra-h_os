@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from 'react';
-import type { AgentDelegation } from '@/services/agents/delegation';
+import { createPortal } from 'react-dom';
 
 interface QuickAddSubmitPayload {
   input: string;
@@ -10,14 +10,13 @@ interface QuickAddSubmitPayload {
 }
 
 interface QuickAddInputProps {
-  activeDelegations: AgentDelegation[];
   onSubmit: (payload: QuickAddSubmitPayload) => Promise<void>;
   // External control (optional - if provided, component is controlled)
   isOpen?: boolean;
   onClose?: () => void;
 }
 
-export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onClose }: QuickAddInputProps) {
+export default function QuickAddInput({ onSubmit, isOpen, onClose }: QuickAddInputProps) {
   const [input, setInput] = useState('');
   const [isPosting, setIsPosting] = useState(false);
   const [isExpandedInternal, setIsExpandedInternal] = useState(false);
@@ -31,12 +30,6 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
   const setIsExpanded = isControlled
     ? (value: boolean) => { if (!value && onClose) onClose(); }
     : setIsExpandedInternal;
-
-  const maxConcurrent = 5;
-  const activeCount = activeDelegations.filter(
-    (d) => d.status === 'queued' || d.status === 'in_progress'
-  ).length;
-  const isSoftLimited = activeCount >= maxConcurrent;
 
   const handleFileUpload = useCallback(async (file: File) => {
     setIsPosting(true);
@@ -83,7 +76,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
     }
 
     // Otherwise, submit text as before
-    if (!input.trim() || isPosting || isSoftLimited) return;
+    if (!input.trim() || isPosting) return;
 
     setIsPosting(true);
     try {
@@ -159,6 +152,13 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
 
   const hasContent = input.trim() || uploadedFile;
 
+  const handleClose = () => {
+    setIsExpanded(false);
+    setInput('');
+    setUploadedFile(null);
+    setUploadError(null);
+  };
+
   // Collapsed state - only show button if NOT controlled externally
   if (!isExpanded) {
     // In controlled mode, don't render anything when closed
@@ -215,81 +215,19 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
     );
   }
 
-  // Expanded state - modal overlay (centered if controlled, absolute if uncontrolled)
+  // Expanded state - the card content
   const modalContent = (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        background: '#0a0a0a',
-        padding: '16px',
-        borderRadius: '12px',
-        border: dragOver ? '1px solid #22c55e' : '1px solid #2a2a2a',
-        animation: 'fadeIn 150ms ease-out',
-        transition: 'border-color 0.15s ease',
-        width: isControlled ? '500px' : 'auto',
-        maxWidth: isControlled ? '90vw' : 'none',
-      }}
+      className="qa-card"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <span style={{
-          color: '#22c55e',
-          fontSize: '11px',
-          fontWeight: 600,
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span style={{
-            width: '18px',
-            height: '18px',
-            borderRadius: '50%',
-            background: '#22c55e',
-            color: '#0a0a0a',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            fontWeight: 700
-          }}>+</span>
-          Add Stuff
-        </span>
-
-        {/* Close button */}
-        <button
-          onClick={() => {
-            setIsExpanded(false);
-            setInput('');
-            setUploadedFile(null);
-            setUploadError(null);
-          }}
-          style={{
-            padding: '6px',
-            background: 'transparent',
-            border: 'none',
-            color: '#666',
-            cursor: 'pointer',
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.15s ease'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#999'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
-        >
+      <div className="qa-header">
+        <span className="qa-title">Add Stuff</span>
+        <button onClick={handleClose} className="qa-close">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -298,27 +236,9 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
 
       {/* File preview (when a file is dropped) */}
       {uploadedFile && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '12px 14px',
-          background: '#0f1a0f',
-          border: '1px solid #1a3a1a',
-          borderRadius: '10px',
-        }}>
+        <div className="qa-file-preview">
           {/* PDF icon */}
-          <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
-          }}>
+          <div className="qa-file-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round"/>
               <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -339,11 +259,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
             }}>
               {uploadedFile.name}
             </div>
-            <div style={{
-              color: '#666',
-              fontSize: '11px',
-              marginTop: '2px'
-            }}>
+            <div style={{ color: '#666', fontSize: '11px', marginTop: '2px' }}>
               {uploadedFile.size < 1024 * 1024
                 ? `${Math.round(uploadedFile.size / 1024)} KB`
                 : `${(uploadedFile.size / 1024 / 1024).toFixed(1)} MB`}
@@ -351,20 +267,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
           </div>
 
           {/* Remove button */}
-          <button
-            onClick={clearFile}
-            style={{
-              padding: '6px',
-              background: 'transparent',
-              border: 'none',
-              color: '#666',
-              cursor: 'pointer',
-              borderRadius: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'color 0.15s ease'
-            }}
+          <button onClick={clearFile} className="qa-close" style={{ color: '#666' }}
             onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
           >
@@ -381,7 +284,7 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
           padding: '10px 12px',
           background: 'rgba(239, 68, 68, 0.1)',
           border: '1px solid rgba(239, 68, 68, 0.2)',
-          borderRadius: '8px',
+          borderRadius: '10px',
           color: '#ef4444',
           fontSize: '12px',
         }}>
@@ -391,28 +294,10 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
 
       {/* Input area - show if no file uploaded */}
       {!uploadedFile && (
-        <div
-          style={{
-            position: 'relative',
-            borderRadius: '10px',
-            border: dragOver ? '2px dashed #22c55e' : '1px solid #1f1f1f',
-            background: dragOver ? 'rgba(34, 197, 94, 0.05)' : '#0a0a0a',
-            transition: 'all 0.15s ease'
-          }}
-        >
+        <div className={`qa-input-wrapper ${dragOver ? 'dragging' : ''}`}>
           {/* Drag overlay */}
           {dragOver && (
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(34, 197, 94, 0.05)',
-              borderRadius: '10px',
-              zIndex: 10,
-              pointerEvents: 'none'
-            }}>
+            <div className="qa-drag-overlay">
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -433,73 +318,32 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Paste a URL, note, or transcript — or drop a PDF file"
-            disabled={isPosting || isSoftLimited}
+            placeholder="Paste a URL, note, or transcript — or drop a PDF"
+            disabled={isPosting}
             autoFocus
-            style={{
-              width: '100%',
-              minHeight: '140px',
-              maxHeight: '300px',
-              padding: '14px 16px',
-              background: 'transparent',
-              border: 'none',
-              color: '#e5e5e5',
-              fontSize: '14px',
-              fontFamily: 'inherit',
-              outline: 'none',
-              resize: 'none',
-              lineHeight: '1.6',
-              opacity: dragOver ? 0.3 : 1,
-              transition: 'opacity 0.15s ease'
-            }}
+            className="qa-textarea"
+            style={{ opacity: dragOver ? 0.3 : 1 }}
           />
         </div>
       )}
 
       {/* Footer */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '11px', color: '#525252' }}>
-          {uploadedFile ? 'Ready to upload' : '\u2318\u21B5 to submit \u00B7 esc to close'}
+      <div className="qa-footer">
+        <span className="qa-hint">
+          {uploadedFile
+            ? 'Ready to upload'
+            : <><kbd>{'\u2318\u21B5'}</kbd> submit <span className="qa-hint-sep">&middot;</span> <kbd>esc</kbd> close</>
+          }
         </span>
         <button
           onClick={handleSubmit}
-          disabled={!hasContent || isPosting || isSoftLimited}
-          style={{
-            width: '38px',
-            height: '38px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '0',
-            background: hasContent && !isPosting ? '#22c55e' : '#262626',
-            border: 'none',
-            borderRadius: '50%',
-            cursor: hasContent && !isPosting ? 'pointer' : 'not-allowed',
-            transition: 'all 0.2s ease',
-            boxShadow: hasContent && !isPosting ? '0 0 0 0 rgba(34, 197, 94, 0)' : 'none'
-          }}
-          onMouseEnter={(e) => {
-            if (hasContent && !isPosting) {
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.3)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 0 0 0 rgba(34, 197, 94, 0)';
-          }}
+          disabled={!hasContent || isPosting}
+          className={`qa-submit ${hasContent && !isPosting ? 'active' : ''}`}
         >
           {isPosting ? (
-            <span style={{
-              width: '14px',
-              height: '14px',
-              border: '2px solid #0a0a0a',
-              borderTopColor: 'transparent',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite'
-            }} />
+            <span className="qa-spinner" />
           ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={hasContent ? '#0a0a0a' : '#525252'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 19V5"/>
               <path d="M5 12l7-7 7 7"/>
             </svg>
@@ -507,64 +351,244 @@ export default function QuickAddInput({ activeDelegations, onSubmit, isOpen, onC
         </button>
       </div>
 
-      {/* Active processing indicator */}
-      {activeCount > 0 && (
-        <div style={{
-          padding: '10px 12px',
-          background: '#0a1a0a',
-          border: '1px solid #1a3a1a',
-          borderRadius: '8px',
-          color: '#22c55e',
-          fontSize: '11px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span style={{
-            width: '6px',
-            height: '6px',
-            borderRadius: '50%',
-            background: '#22c55e',
-            animation: 'pulse 2s ease-in-out infinite'
-          }} />
-          Adding {activeCount} node{activeCount > 1 ? 's' : ''}...
-        </div>
-      )}
-
       <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-4px); }
-          to { opacity: 1; transform: translateY(0); }
+        .qa-card {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          background: #141414;
+          padding: 24px;
+          border-radius: 16px;
+          border: 1px solid #262626;
+          transition: border-color 0.15s ease;
+          box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.04),
+            0 24px 48px -12px rgba(0, 0, 0, 0.6);
+          animation: qaCardIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+          width: ${isControlled ? '540px' : 'auto'};
+          max-width: ${isControlled ? '90vw' : 'none'};
         }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
+
+        .qa-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
         }
-        @keyframes spin {
+
+        .qa-title {
+          color: #fafafa;
+          font-size: 15px;
+          font-weight: 600;
+        }
+
+        .qa-close {
+          padding: 6px;
+          background: transparent;
+          border: none;
+          color: #525252;
+          cursor: pointer;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.15s ease;
+        }
+
+        .qa-close:hover {
+          color: #a3a3a3;
+        }
+
+        .qa-file-preview {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          background: #0f1a0f;
+          border: 1px solid #1a3a1a;
+          border-radius: 12px;
+        }
+
+        .qa-file-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .qa-input-wrapper {
+          position: relative;
+          border-radius: 12px;
+          border: 1px solid #262626;
+          background: #0a0a0a;
+          transition: all 0.15s ease;
+        }
+
+        .qa-input-wrapper:focus-within {
+          border-color: #333;
+        }
+
+        .qa-input-wrapper.dragging {
+          border: 2px dashed #22c55e;
+          background: rgba(34, 197, 94, 0.05);
+        }
+
+        .qa-drag-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(34, 197, 94, 0.05);
+          border-radius: 12px;
+          z-index: 10;
+          pointer-events: none;
+        }
+
+        .qa-textarea {
+          width: 100%;
+          min-height: 120px;
+          max-height: 300px;
+          padding: 16px 18px;
+          background: transparent;
+          border: none;
+          color: #fafafa;
+          font-size: 15px;
+          font-family: inherit;
+          outline: none;
+          resize: none;
+          line-height: 1.6;
+          transition: opacity 0.15s ease;
+        }
+
+        .qa-textarea::placeholder {
+          color: #525252;
+        }
+
+        .qa-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .qa-hint {
+          font-size: 11px;
+          color: #525252;
+        }
+
+        .qa-hint kbd {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2px 6px;
+          background: #262626;
+          border-radius: 4px;
+          font-size: 10px;
+          font-family: inherit;
+          color: #737373;
+          border: 1px solid #333;
+        }
+
+        .qa-hint-sep {
+          margin: 0 2px;
+        }
+
+        .qa-submit {
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          background: #262626;
+          border: none;
+          border-radius: 10px;
+          color: #525252;
+          cursor: default;
+          transition: all 0.2s ease;
+        }
+
+        .qa-submit.active {
+          background: #22c55e;
+          color: #052e16;
+          cursor: pointer;
+        }
+
+        .qa-submit.active:hover {
+          background: #16a34a;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+
+        .qa-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid #0a0a0a;
+          border-top-color: transparent;
+          border-radius: 50%;
+          animation: qaSpin 0.8s linear infinite;
+        }
+
+        @keyframes qaCardIn {
+          from {
+            opacity: 0;
+            transform: scale(0.96) translateY(-8px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+
+        @keyframes qaSpin {
           to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
   );
 
-  // In controlled mode, wrap with backdrop
+  // In controlled mode, wrap with blurred backdrop + portal
   if (isControlled) {
-    return (
+    const backdrop = (
       <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-        }}
-        onClick={() => setIsExpanded(false)}
+        className="qa-backdrop"
+        onClick={handleClose}
       >
-        {modalContent}
+        <div className="qa-container">
+          {modalContent}
+        </div>
+
+        <style jsx>{`
+          .qa-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            padding-top: 15vh;
+            z-index: 9999;
+            animation: qaBackdropIn 200ms ease-out;
+          }
+
+          .qa-container {
+            width: 100%;
+            max-width: 540px;
+          }
+
+          @keyframes qaBackdropIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+        `}</style>
       </div>
     );
+
+    return typeof window !== 'undefined' ? createPortal(backdrop, document.body) : null;
   }
 
   // Uncontrolled mode - render with absolute positioning

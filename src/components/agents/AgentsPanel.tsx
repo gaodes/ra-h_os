@@ -241,7 +241,6 @@ export default function AgentsPanel({ openTabsData, activeTabId, activeDimension
             {/* Add Stuff - top right */}
             <div style={{ maxWidth: '200px' }}>
               <QuickAddInput
-                activeDelegations={orderedDelegations}
                 onSubmit={handleQuickAddSubmit}
               />
             </div>
