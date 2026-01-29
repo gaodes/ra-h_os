@@ -185,3 +185,18 @@ Goal: Strip ra-h_os to lightweight 2-panel UI + MCP server
   - The package.json was relatively clean to begin with
   - npm install and type-check both pass after removal
 
+## Story 12: Remove dead types
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/types/prompts.ts (was used by deleted contextBuilder.ts for Anthropic prompt caching)
+- Files kept (all verified in use):
+  - analytics.ts (used by 3 files: workflowExecutor, middleware, pricing)
+  - database.ts (used by 25 files - core type definitions)
+  - logs.ts (used by 3 files: logs API, LogsViewer, LogsRow)
+  - views.ts (used by 2 files: ViewFilters, KanbanView)
+  - pdf-parse.d.ts (used by paper extractor)
+- Learnings:
+  - prompts.ts contained CacheableBlock, SystemPromptResult, CacheStats for Anthropic prompt caching
+  - These were only used by contextBuilder.ts which was deleted in Story 8
+  - Type files are well-organized - each file has a clear purpose
+

@@ -161,8 +161,8 @@
         "All remaining types are used",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted prompts.ts (was used by deleted contextBuilder.ts for Anthropic prompt caching). All remaining type files verified in use: analytics.ts (3 files), database.ts (25 files), logs.ts (3 files), views.ts (2 files), pdf-parse.d.ts (paper extractor)."
     },
     {
       "id": "13",
