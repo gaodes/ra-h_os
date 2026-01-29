@@ -13,8 +13,8 @@
         "No remaining imports of 'delegation' from services/agents",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced AgentDelegationService with direct execution in workflowExecutor and quickAdd. Added stub AgentDelegation types and voice hook stubs to UI components for compatibility (to be removed in later stories)."
     },
     {
       "id": "2",
@@ -31,8 +31,8 @@
         "RAHChat.tsx no longer imports or uses voice hooks",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted all 4 voice hooks, voice API routes (/api/voice/, /api/realtime/), voice service directory. Removed voice stub hooks and voice-related code from RAHChat.tsx and TerminalInput.tsx."
     },
     {
       "id": "3",

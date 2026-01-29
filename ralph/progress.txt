@@ -8,4 +8,49 @@ Goal: Strip ra-h_os to lightweight 2-panel UI + MCP server
 - Target: remove chat agents, voice, delegations, simplify to 2-panel
 - Keep: nodes/edges/dimensions, MCP server, workflows, extraction
 
+## Story 1: Remove agent delegation system
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/services/agents/delegation.ts
+  - app/api/rah/delegations/route.ts
+  - app/api/rah/delegations/stream/route.ts
+  - app/api/rah/delegations/[sessionId]/route.ts
+  - app/api/rah/delegations/[sessionId]/summary/route.ts
+  - src/components/agents/DelegationIndicator.tsx
+- Files modified:
+  - src/services/agents/workflowExecutor.ts (removed delegation streaming)
+  - src/services/agents/quickAdd.ts (direct execution instead of delegation)
+  - src/tools/orchestration/executeWorkflow.ts (direct execution)
+  - src/tools/orchestration/delegateToWiseRAH.ts (direct execution)
+  - app/api/workflows/execute/route.ts (direct execution)
+  - src/components/layout/ThreePanelLayout.tsx (stub type, removed API calls)
+  - src/components/agents/RAHChat.tsx (stub type, stub voice hooks)
+  - src/components/agents/AgentsPanel.tsx (stub type)
+  - src/components/agents/MiniRAHPanel.tsx (stub type)
+  - src/components/agents/WiseRAHPanel.tsx (stub type)
+  - src/components/agents/QuickAddStatus.tsx (stub type)
+  - src/components/panes/types.ts (stub type)
+  - src/components/panes/WorkflowsPane.tsx (import from types.ts)
+- Learnings:
+  - Delegation system was deeply integrated with workflows; had to refactor to direct execution
+  - UI components that will be deleted later needed stub types to compile
+  - Voice hooks also needed stubs in RAHChat.tsx (will be cleaned up in Story 2)
+
+## Story 2: Remove voice features
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/components/agents/hooks/useVoiceSession.ts
+  - src/components/agents/hooks/useRealtimeVoiceClient.ts
+  - src/components/agents/hooks/useAssistantTTS.ts
+  - src/components/agents/hooks/useVoiceInterruption.ts
+  - app/api/voice/tts/route.ts
+  - app/api/realtime/ephemeral-token/route.ts
+  - src/services/voice/usageLogger.ts
+- Files modified:
+  - src/components/agents/RAHChat.tsx (removed all voice-related code and stub hooks)
+  - src/components/agents/TerminalInput.tsx (removed voice props and voice UI)
+- Learnings:
+  - Voice hooks were stubbed in Story 1, so removal was straightforward
+  - TerminalInput had voice UI (amplitude bars, mic icons) that needed cleanup
+  - No imports to these files from other parts of the codebase
 

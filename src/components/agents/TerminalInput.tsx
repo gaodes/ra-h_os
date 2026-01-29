@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, type DragEvent } from 'react';
-import { Mic, MicOff } from 'lucide-react';
 
 interface TerminalInputProps {
   onSubmit: (text: string) => void;
@@ -10,10 +9,6 @@ interface TerminalInputProps {
   helperId?: number;
   disabledExternally?: boolean;
   disabledMessage?: string;
-  onVoiceToggle?: () => void;
-  isVoiceActive?: boolean;
-  voiceAmplitude?: number;
-  voiceError?: string | null;
 }
 
 export default function TerminalInput({
@@ -23,10 +18,6 @@ export default function TerminalInput({
   helperId,
   disabledExternally = false,
   disabledMessage,
-  onVoiceToggle,
-  isVoiceActive = false,
-  voiceAmplitude = 0,
-  voiceError,
 }: TerminalInputProps) {
   const [input, setInput] = useState('');
   const [rows, setRows] = useState(1);
@@ -54,26 +45,26 @@ export default function TerminalInput({
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    
+
     const lineHeight = 24; // line-height * font-size approximately
     const minHeight = 32;
     const maxHeight = 120;
-    
+
     // Check if content overflows current height (need to grow)
     const needsGrow = textarea.scrollHeight > textarea.clientHeight;
-    
+
     // Check if we cleared content significantly (need to shrink)
     const lineCount = (input.match(/\n/g) || []).length + 1;
     const estimatedHeight = Math.max(lineCount * lineHeight, minHeight);
     const needsShrink = !input.trim() || (textarea.clientHeight > estimatedHeight + lineHeight);
-    
+
     if (needsGrow || needsShrink) {
       // Only recalculate when necessary
       textarea.style.height = 'auto';
       const scrollHeight = textarea.scrollHeight;
       const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
       textarea.style.height = `${newHeight}px`;
-      
+
       const newRows = Math.min(Math.max(1, Math.floor(newHeight / lineHeight)), 5);
       setRows(newRows);
     }
@@ -135,22 +126,7 @@ export default function TerminalInput({
   }, [input]);
 
   const trimmedInput = input.trim();
-  const showVoiceStart = !isVoiceActive && !trimmedInput && Boolean(onVoiceToggle);
-  const showVoiceStop = Boolean(onVoiceToggle) && isVoiceActive;
-  const buttonIsDisabled =
-    showVoiceStart || showVoiceStop
-      ? false
-      : (!trimmedInput || isProcessing || disabledExternally);
-
-  const handlePrimaryAction = () => {
-    if (showVoiceStart || showVoiceStop) {
-      onVoiceToggle?.();
-      return;
-    }
-    handleSubmit();
-  };
-
-  const amplitudeBars = Array.from({ length: 8 });
+  const buttonIsDisabled = !trimmedInput || isProcessing || disabledExternally;
 
   // Handle node drag over chat input
   const handleDragOver = (e: DragEvent<HTMLTextAreaElement>) => {
@@ -253,7 +229,6 @@ export default function TerminalInput({
       gap: '8px',
       padding: '8px 16px 12px',
       background: 'transparent',
-      // Remove separator/border between chat area and input
       borderTop: 'none',
       fontFamily: 'inherit'
     }}>
@@ -276,49 +251,6 @@ export default function TerminalInput({
         flexDirection: 'column',
         gap: '4px'
       }}>
-      {isVoiceActive && (
-        <div style={{
-          border: 'none',
-          borderRadius: '0',
-          background: 'transparent',
-          padding: '12px 4px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{
-              fontSize: '12px',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: '#d4d4d4',
-            }}>
-              RA-H is listening
-            </span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: '3px', height: '20px', marginTop: '6px' }}>
-            {amplitudeBars.map((_, index) => {
-              const level = (index + 1) / amplitudeBars.length;
-              const active = voiceAmplitude >= level - 0.0001;
-              return (
-                <div
-                  key={`amp-${index}`}
-                  style={{
-                    width: '100%',
-                    borderRadius: '2px',
-                    height: `${10 + index * 1.2}px`,
-                    background: active ? '#22c55e' : '#1f1f1f',
-                    transition: 'background 120ms ease',
-                  }}
-                />
-              );
-            })}
-          </div>
-          {voiceError && (
-            <span style={{ color: '#f87171', fontSize: '11px' }}>{voiceError}</span>
-          )}
-        </div>
-      )}
       {/* Input Row with Textarea and Button */}
         <div style={{
           display: 'flex',
@@ -361,7 +293,6 @@ export default function TerminalInput({
                 caretColor: 'transparent'
               })
             }}
-            // No focus border toggling; keep clean
             onFocus={() => {}}
             onBlur={() => {}}
           />
@@ -382,30 +313,18 @@ export default function TerminalInput({
               ))}
             </div>
           )}
-          
-          {/* Submit Button (minimal icon) */}
+
+          {/* Submit Button */}
           <button
-            onClick={handlePrimaryAction}
+            onClick={handleSubmit}
             disabled={buttonIsDisabled}
-            aria-label={
-              showVoiceStop
-                ? 'Stop voice session'
-                : showVoiceStart
-                  ? 'Start voice session'
-                  : isProcessing
-                    ? 'Processing'
-                    : 'Send message'
-            }
+            aria-label={isProcessing ? 'Processing' : 'Send message'}
             title={
-              showVoiceStop
-                ? 'Stop voice session'
-                : showVoiceStart
-                  ? 'Start voice session'
-                  : disabledExternally
-                    ? (disabledMessage || 'Voice mode active')
-                    : isProcessing
-                      ? 'Processing…'
-                      : 'Send (Enter)'
+              disabledExternally
+                ? (disabledMessage || 'Disabled')
+                : isProcessing
+                  ? 'Processing…'
+                  : 'Send (Enter)'
             }
             style={{
               width: '36px',
@@ -424,7 +343,7 @@ export default function TerminalInput({
             onMouseEnter={(e) => {
               if (!buttonIsDisabled) {
                 e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = `0 4px 12px rgba(${showVoiceStart || showVoiceStop ? '124,58,237' : '34,197,94'}, 0.4)`;
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(34,197,94, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
@@ -434,11 +353,7 @@ export default function TerminalInput({
               }
             }}
           >
-            {showVoiceStop ? (
-              <MicOff size={16} strokeWidth={2.4} color="#0a0a0a" />
-            ) : showVoiceStart ? (
-              <Mic size={16} strokeWidth={2.4} color="#0a0a0a" />
-            ) : isProcessing ? (
+            {isProcessing ? (
               <span style={{ fontSize: '12px' }}>•••</span>
             ) : (
               <svg
@@ -467,13 +382,13 @@ export default function TerminalInput({
           <span>⏎ send</span>
           <span>⇧⏎ newline</span>
           {(isProcessing || disabledExternally) && (
-            <span style={{ 
+            <span style={{
               marginLeft: 'auto',
               color: disabledExternally ? '#a855f7' : '#ffcc66',
               textTransform: 'uppercase',
               letterSpacing: '0.12em'
             }}>
-              {disabledExternally ? (disabledMessage || 'voice mode active') : 'processing...'}
+              {disabledExternally ? (disabledMessage || 'disabled') : 'processing...'}
             </span>
           )}
         </div>

@@ -8,7 +8,6 @@ import TerminalInput from './TerminalInput';
 import { Zap, Flame } from 'lucide-react';
 import { useSSEChat, ChatMessage, MessageRole } from './hooks/useSSEChat';
 import { useQuotaHandler } from '@/hooks/useQuotaHandler';
-import { apiKeyService } from '@/services/storage/apiKeys';
 
 // Stub type for delegation (delegation system removed in rah-light)
 type AgentDelegation = {
@@ -27,45 +26,7 @@ function DelegationIndicator({ delegations }: { delegations: AgentDelegation[] }
   return null;
 }
 
-// Stub voice hooks (voice system will be removed in story 2)
-function useVoiceSession() {
-  return {
-    isActive: false,
-    amplitude: 0,
-    startSession: () => {},
-    stopSession: () => {},
-    resetTranscript: () => {},
-    setStatus: (_status: string) => {},
-    setAmplitude: (_amp: number) => {},
-    setInterimTranscript: (_text: string) => {},
-    appendFinalTranscript: (_text: string) => {},
-  };
-}
-
-function useAssistantTTS(_options: { onSpeechStart?: () => void; onSpeechComplete?: () => void; onError?: (e: Error) => void }) {
-  return {
-    speak: (_text: string, _options?: { flush?: boolean; metadata?: Record<string, string> }) => {},
-    stop: () => {},
-    status: 'idle' as const,
-  };
-}
-
-function useVoiceInterruption(_options: { amplitude: number; isVoiceActive: boolean; ttsStatus: string; onInterruption: () => void }) {}
-
-function useRealtimeVoiceClient(_handlers: { onStatusChange?: (status: string) => void; onInterimTranscript?: (text: string) => void; onFinalTranscript?: (text: string) => void; onAmplitude?: (amp: number) => void; onError?: (e: Error) => void }, _options: { getAuthToken: () => string | null }) {
-  return {
-    connect: () => {},
-    disconnect: () => {},
-    start: () => {},
-    stop: () => {},
-  };
-}
-
 const createSessionId = () => `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const createVoiceRequestId = () =>
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `voice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 interface HighlightedPassage {
   selectedText: string;
@@ -110,7 +71,7 @@ export default function RAHChat({
   const [internalMessages, internalSetMessages] = useState<ChatMessage[]>([]);
   const messages = externalMessages !== undefined ? externalMessages : internalMessages;
   const setMessages = externalSetMessages || internalSetMessages;
-  
+
   const [sessionId, setSessionId] = useState(() => createSessionId());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatMode = mode === 'hard' ? 'hard' : 'easy';
@@ -127,53 +88,6 @@ export default function RAHChat({
     await refetchUsage();
   });
   const setMessagesRef = useRef(setMessages);
-  const voice = useVoiceSession();
-  const {
-    isActive: isVoiceActive,
-    amplitude: voiceAmplitude,
-    startSession: startVoice,
-    stopSession: stopVoice,
-    resetTranscript: resetVoiceTranscript,
-    setStatus: setVoiceStatus,
-    setAmplitude: setVoiceAmplitude,
-    setInterimTranscript,
-    appendFinalTranscript,
-  } = voice;
-  const pendingVoiceQueueRef = useRef<{ text: string; queuedAt: number }[]>([]);
-  const assistantSpeechMapRef = useRef<Map<string, string>>(new Map());
-  const [voiceError, setVoiceError] = useState<string | null>(null);
-  const voiceErrorHandledRef = useRef(false);
-  const voiceStartTimestampRef = useRef<number | null>(null);
-
-  const handleVoiceError = useCallback((error: Error) => {
-    console.error('[RAHChat] Voice error:', error);
-    setVoiceError(error.message);
-    if (isVoiceActive) {
-      stopVoice();
-    }
-    resetVoiceTranscript();
-    setVoiceAmplitude(0);
-    setVoiceStatus('idle');
-    pendingVoiceQueueRef.current = [];
-    assistantSpeechMapRef.current.clear();
-  }, [isVoiceActive, resetVoiceTranscript, setVoiceAmplitude, setVoiceStatus, stopVoice]);
-
-  const { speak: speakAssistantResponse, stop: stopAssistantTTS, status: ttsStatus } = useAssistantTTS({
-    onSpeechStart: () => {
-      if (isVoiceActive) {
-        setVoiceStatus('speaking');
-      }
-    },
-    onSpeechComplete: () => {
-      setVoiceStatus(isVoiceActive ? 'listening' : 'idle');
-    },
-    onError: handleVoiceError,
-  });
-
-  const handleVoiceInterruption = useCallback(() => {
-    stopAssistantTTS();
-    setVoiceStatus('listening');
-  }, [setVoiceStatus, stopAssistantTTS]);
 
   const sse = useSSEChat('/api/rah/chat', setMessages, {
     getAuthToken: () => null,
@@ -186,14 +100,6 @@ export default function RAHChat({
       }
     },
   });
-
-  useVoiceInterruption({
-    amplitude: voiceAmplitude,
-    isVoiceActive,
-    ttsStatus,
-    onInterruption: handleVoiceInterruption,
-  });
-
 
   const sendMessage = useCallback(async (text: string) => {
     if (delegationMode) return; // Delegation chats are read-only
@@ -211,71 +117,9 @@ export default function RAHChat({
     });
   }, [activeTabId, chatMode, checkQuotaBeforeRequest, delegationMode, isQuotaExceeded, messages, openTabsData, sse, sessionId]);
 
-  const handleVoiceFinalTranscript = useCallback(
-    (raw: string) => {
-      const normalized = raw.trim();
-      console.info('[RAHVoice] Final transcript received:', normalized || '(empty)');
-      setInterimTranscript('');
-      if (!normalized) {
-        console.info('[RAHVoice] Ignoring empty transcript');
-        return;
-      }
-      appendFinalTranscript(normalized);
-      if (sse.isLoading) {
-        pendingVoiceQueueRef.current.push({ text: normalized, queuedAt: Date.now() });
-        console.info('[RAHVoice] SSE busy, queueing transcript', {
-          queuedCount: pendingVoiceQueueRef.current.length,
-        });
-        setVoiceStatus('thinking');
-        return;
-      }
-      setVoiceStatus('thinking');
-      console.info('[RAHVoice] Dispatching transcript to /api/rah/chat');
-      void sendMessage(normalized);
-    },
-    [appendFinalTranscript, sendMessage, setInterimTranscript, setVoiceStatus, sse.isLoading]
-  );
-
-  const voiceRealtime = useRealtimeVoiceClient(
-    {
-      onStatusChange: (status) => {
-        if (!isVoiceActive && status !== 'idle') return;
-        if (status === 'listening' && (sse.isLoading || pendingVoiceQueueRef.current.length > 0)) {
-          setVoiceStatus('thinking');
-          return;
-        }
-        setVoiceStatus(status);
-      },
-      onInterimTranscript: setInterimTranscript,
-      onFinalTranscript: handleVoiceFinalTranscript,
-      onAmplitude: setVoiceAmplitude,
-      onError: handleVoiceError,
-    },
-    {
-      getAuthToken: () => null,
-    }
-  );
-
   const handleStreamComplete = useCallback(async () => {
-    if (pendingVoiceQueueRef.current.length > 0) {
-      console.info('[RAHVoice] SSE stream complete, draining queued transcripts', {
-        queued: pendingVoiceQueueRef.current.length,
-      });
-    }
-    while (pendingVoiceQueueRef.current.length > 0) {
-      const nextQueued = pendingVoiceQueueRef.current.shift();
-      if (!nextQueued) {
-        break;
-      }
-      const queueLatency = Date.now() - nextQueued.queuedAt;
-      setVoiceStatus('thinking');
-      console.info('[RAHVoice] Dispatching queued transcript to /api/rah/chat', {
-        queuedMs: queueLatency,
-      });
-      await sendMessage(nextQueued.text);
-    }
     await refetchUsage();
-  }, [sendMessage, setVoiceStatus, refetchUsage]);
+  }, [refetchUsage]);
 
   useEffect(() => {
     streamCompleteHandlerRef.current = handleStreamComplete;
@@ -284,17 +128,6 @@ export default function RAHChat({
   useEffect(() => {
     setMessagesRef.current = setMessages;
   }, [setMessages]);
-
-  useEffect(() => {
-    if (!voiceError) {
-      voiceErrorHandledRef.current = false;
-      return;
-    }
-    if (voiceErrorHandledRef.current) return;
-    voiceErrorHandledRef.current = true;
-    voiceRealtime.stop();
-    stopAssistantTTS();
-  }, [voiceError, voiceRealtime, stopAssistantTTS]);
 
   const focusSummary = useMemo(() => {
     if (!openTabsData.length) return null;
@@ -315,41 +148,11 @@ export default function RAHChat({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    if (!isVoiceActive) {
-      assistantSpeechMapRef.current.clear();
-      stopAssistantTTS();
-      return;
-    }
-    if (sse.isLoading) return;
-    const assistantMessages = messages.filter((m) => m.role === MessageRole.ASSISTANT);
-    if (!assistantMessages.length) return;
-    const latest = assistantMessages[assistantMessages.length - 1];
-    const spokenContent = assistantSpeechMapRef.current.get(latest.id);
-    if (!latest.content.trim() || spokenContent === latest.content) return;
-    assistantSpeechMapRef.current.set(latest.id, latest.content);
-    const voiceRequestId = createVoiceRequestId();
-    speakAssistantResponse(latest.content, {
-      flush: true,
-      metadata: {
-        sessionId,
-        helper: helperKey,
-        requestId: voiceRequestId,
-        messageId: latest.id,
-      },
-    });
-  }, [helperKey, isVoiceActive, messages, sessionId, sse.isLoading, speakAssistantResponse, stopAssistantTTS]);
-
-
   const handleNewChat = () => {
     if (delegationMode) return;
     sse.abort();
     setMessages((_prev) => []);
     setSessionId(createSessionId());
-    if (isVoiceActive) {
-      stopVoice();
-      resetVoiceTranscript();
-    }
   };
 
   // Subscribe to delegation stream if in delegation mode
@@ -361,7 +164,7 @@ export default function RAHChat({
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         if (data.type === 'text-delta' && data.delta) {
           setMessagesRef.current((prev) => {
             const lastMsg = prev[prev.length - 1];
@@ -428,52 +231,6 @@ export default function RAHChat({
       eventSource.close();
     };
   }, [delegationMode, delegationSessionId]);
-
-  useEffect(() => {
-    if (delegationMode && isVoiceActive) {
-      voiceRealtime.stop();
-      stopVoice();
-      resetVoiceTranscript();
-      stopAssistantTTS();
-    }
-  }, [delegationMode, isVoiceActive, resetVoiceTranscript, stopAssistantTTS, stopVoice, voiceRealtime]);
-
-  const handleVoiceToggle = useCallback(async () => {
-    if (isVoiceActive) {
-      voiceRealtime.stop();
-      stopVoice();
-      resetVoiceTranscript();
-      setVoiceAmplitude(0);
-      setVoiceStatus('idle');
-      assistantSpeechMapRef.current.clear();
-      pendingVoiceQueueRef.current = [];
-      stopAssistantTTS();
-      voiceStartTimestampRef.current = null;
-      return;
-    }
-    setVoiceError(null);
-    try {
-      voiceStartTimestampRef.current = performance.now();
-      console.info('[RAHVoice] Voice session starting');
-      await voiceRealtime.start();
-      startVoice();
-      setVoiceStatus('listening');
-    } catch (error) {
-      voiceStartTimestampRef.current = null;
-      handleVoiceError(error instanceof Error ? error : new Error(String(error)));
-    }
-  }, [
-    handleVoiceError,
-    isVoiceActive,
-    resetVoiceTranscript,
-    setVoiceAmplitude,
-    setVoiceStatus,
-    setVoiceError,
-    startVoice,
-    stopAssistantTTS,
-    stopVoice,
-    voiceRealtime,
-  ]);
 
   return (
     <div style={{
@@ -542,7 +299,6 @@ export default function RAHChat({
             ))}
           </>
         )}
-        {/* Voice transcript preview removed for streamlined UI */}
         <div ref={messagesEndRef} />
       </div>
 
@@ -569,14 +325,8 @@ export default function RAHChat({
           <TerminalInput
             onSubmit={sendMessage}
             isProcessing={sse.isLoading || isQuotaExceeded}
-            placeholder={isVoiceActive ? 'voice mode active — end session to type…' : `ask ${helperDisplayName}...`}
+            placeholder={`ask ${helperDisplayName}...`}
             helperId={activeTabId ?? undefined}
-            disabledExternally={isVoiceActive}
-            disabledMessage="voice mode active"
-            onVoiceToggle={handleVoiceToggle}
-            isVoiceActive={isVoiceActive}
-            voiceAmplitude={voiceAmplitude}
-            voiceError={voiceError || undefined}
           />
           <div style={{
             display: 'flex',
