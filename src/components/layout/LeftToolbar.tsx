@@ -5,7 +5,6 @@ import {
   Search,
   Plus,
   LayoutList,
-  MessageSquare,
   Map,
   Folder,
   Workflow,
@@ -23,10 +22,9 @@ interface LeftToolbarProps {
   slotBType: PaneType | null;
 }
 
-// Map pane types to their icons
+// Map pane types to their icons (chat removed in rah-light)
 const PANE_TYPE_ICONS: Record<string, typeof LayoutList> = {
   views: LayoutList,
-  chat: MessageSquare,
   map: Map,
   dimensions: Folder,
   workflows: Workflow,
@@ -34,14 +32,13 @@ const PANE_TYPE_ICONS: Record<string, typeof LayoutList> = {
 
 const PANE_TYPE_LABELS: Record<string, string> = {
   views: 'Feed',
-  chat: 'Chat',
   map: 'Map',
   dimensions: 'Dimensions',
   workflows: 'Workflows',
 };
 
-// Pane types shown in the toolbar (excludes 'node' which is opened via Feed)
-const TOOLBAR_PANE_TYPES: PaneType[] = ['views', 'chat', 'map', 'dimensions', 'workflows'];
+// Pane types shown in the toolbar (excludes 'node' which is opened via Feed, chat removed in rah-light)
+const TOOLBAR_PANE_TYPES: PaneType[] = ['views', 'map', 'dimensions', 'workflows'];
 
 interface ToolbarButtonProps {
   icon: typeof Search;

@@ -6,7 +6,7 @@ import SearchModal from '../nodes/SearchModal';
 import { Node } from '@/types/database';
 import { DatabaseEvent } from '@/services/events';
 import { usePersistentState } from '@/hooks/usePersistentState';
-import type { ChatMessage } from '@/components/agents/hooks/useSSEChat';
+// ChatMessage import removed - chat disabled in rah-light
 
 // Stub type for delegation (delegation system removed in rah-light)
 type AgentDelegation = {
@@ -25,8 +25,8 @@ type AgentDelegation = {
 import LeftToolbar from './LeftToolbar';
 import SplitHandle from './SplitHandle';
 
-// Pane components
-import { NodePane, ChatPane, WorkflowsPane, DimensionsPane, MapPane, ViewsPane } from '../panes';
+// Pane components (ChatPane removed in rah-light)
+import { NodePane, WorkflowsPane, DimensionsPane, MapPane, ViewsPane } from '../panes';
 import QuickAddInput from '../agents/QuickAddInput';
 import type { PaneType, SlotState, PaneAction } from '../panes/types';
 
@@ -35,14 +35,14 @@ export default function ThreePanelLayout() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Slot states - the core of the flexible pane system
-  // Default: Feed on left, Chat on right
-  const [slotA, setSlotA] = usePersistentState<SlotState | null>('ui.slotA.v3', {
+  // Default: Feed on left, closed on right (chat removed in rah-light)
+  const [slotA, setSlotA] = usePersistentState<SlotState | null>('ui.slotA.v4', {
     type: 'views',
   });
 
   // SlotB can be null (closed) or a SlotState
-  // Default: Chat on the right
-  const [slotB, setSlotB] = usePersistentState<SlotState | null>('ui.slotB.v3', { type: 'chat' });
+  // Default: closed (chat removed in rah-light)
+  const [slotB, setSlotB] = usePersistentState<SlotState | null>('ui.slotB.v4', null);
 
   // SlotB width as percentage (when open)
   const [slotBWidth, setSlotBWidth] = usePersistentState<number>('ui.slotBWidth', 50);
@@ -75,17 +75,14 @@ export default function ThreePanelLayout() {
   const [focusPanelRefresh, setFocusPanelRefresh] = useState(0);
   const [folderViewRefresh, setFolderViewRefresh] = useState(0);
 
-  // Active dimension tracking (for chat context)
+  // Active dimension tracking
   const [activeDimension, setActiveDimension] = usePersistentState<string | null>('ui.focus.activeDimension', null);
 
   // Delegations state (deprecated - kept for component compatibility)
   const [delegationsMap] = useState<Record<string, AgentDelegation>>({});
   const delegations = useMemo(() => Object.values(delegationsMap), [delegationsMap]);
 
-  // Chat state (lifted to persist across pane type changes)
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-
-  // Source awareness - highlighted passage context for agent
+  // Source awareness - highlighted passage context
   const [highlightedPassage, setHighlightedPassage] = useState<{
     nodeId: number;
     nodeTitle: string;
@@ -95,33 +92,25 @@ export default function ThreePanelLayout() {
   // Ref to get current openTabs value in SSE handler
   const openTabsRef = useRef<number[]>([]);
 
-  // Get open tabs from the slot that has nodes (for chat context)
+  // Get open tabs from the slot that has nodes
   // Memoize to prevent infinite re-renders
   const { openTabs, activeTab } = useMemo(() => {
     const slotAHasNodes = slotA?.type === 'node';
     const slotBHasNodes = slotB?.type === 'node';
 
-    // If chat is in Slot A, use Slot B's nodes
-    if (slotA?.type === 'chat' && slotBHasNodes) {
-      return {
-        openTabs: slotB.nodeTabs ?? [],
-        activeTab: slotB.activeNodeTab ?? null,
-      };
-    }
-
-    // If chat is in Slot B (default), use Slot A's nodes
-    if (slotB?.type === 'chat' && slotAHasNodes && slotA) {
-      return {
-        openTabs: slotA.nodeTabs ?? [],
-        activeTab: slotA.activeNodeTab ?? null,
-      };
-    }
-
-    // Fallback: use Slot A if it has nodes
+    // Use Slot A if it has nodes
     if (slotAHasNodes && slotA) {
       return {
         openTabs: slotA.nodeTabs ?? [],
         activeTab: slotA.activeNodeTab ?? null,
+      };
+    }
+
+    // Fallback: use Slot B if it has nodes
+    if (slotBHasNodes && slotB) {
+      return {
+        openTabs: slotB.nodeTabs ?? [],
+        activeTab: slotB.activeNodeTab ?? null,
       };
     }
 
@@ -189,8 +178,8 @@ export default function ThreePanelLayout() {
         if (slotB) {
           setSlotB(null);
         } else {
-          // Open with chat by default
-          setSlotB({ type: 'chat' });
+          // Open with node pane by default (chat removed in rah-light)
+          setSlotB({ type: 'node', nodeTabs: [], activeNodeTab: null });
         }
       }
       // Cmd+N - open Add Stuff modal
@@ -749,7 +738,7 @@ export default function ThreePanelLayout() {
 
   // Split handle callbacks
   const handleOpenSecondPane = useCallback(() => {
-    setSlotB({ type: 'chat' }); // Default to chat when opening
+    setSlotB({ type: 'node', nodeTabs: [], activeNodeTab: null }); // Default to node pane (chat removed in rah-light)
     setActivePane('B');
   }, [setSlotB]);
 
@@ -816,29 +805,7 @@ export default function ThreePanelLayout() {
           />
         );
 
-      case 'chat':
-        return (
-          <ChatPane
-            slot={slot}
-            isActive={isActive}
-            onPaneAction={slot === 'A' ? handleSlotAAction : handleSlotBAction}
-            onCollapse={onCollapse}
-            onSwapPanes={slotB ? handleSwapPanes : undefined}
-            openTabsData={openTabsData}
-            activeTabId={activeTab}
-            activeDimension={activeDimension}
-            onClearDimension={() => setActiveDimension(null)}
-            onNodeClick={(nodeId) => {
-              handleNodeSelect(nodeId, false);
-              setActivePane(slot);
-            }}
-            delegations={delegations}
-            chatMessages={chatMessages as unknown[]}
-            setChatMessages={setChatMessages as React.Dispatch<React.SetStateAction<unknown[]>>}
-            highlightedPassage={highlightedPassage}
-            onClearPassage={() => setHighlightedPassage(null)}
-          />
-        );
+      // case 'chat' removed in rah-light
 
       case 'workflows':
         return (
