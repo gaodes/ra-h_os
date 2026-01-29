@@ -1,14 +1,14 @@
-# Tools & Workflows
+# Tools & Guides
 
-> MCP tools available for external agents and the workflow execution system.
+> MCP tools for external agents and the guides system for context sharing.
 
-**How it works:** RA-H Light exposes tools via MCP that external AI agents can call to read, create, and update your knowledge graph. Workflows are pre-written instruction sets that can be executed via the `/api/workflows/execute` endpoint.
+**How it works:** RA-H Light exposes tools via MCP that external AI agents can call to read, create, and update your knowledge graph. Guides are markdown documents that help external agents understand your knowledge base.
 
 ---
 
 ## MCP Tools
 
-RA-H Light provides 11 MCP tools for external agents:
+RA-H Light provides MCP tools for external agents:
 
 ### Node Operations
 
@@ -40,6 +40,14 @@ RA-H Light provides 11 MCP tools for external agents:
 | Tool | Description |
 |------|-------------|
 | `rah_search_embeddings` | Semantic search across chunk embeddings |
+
+### Guides
+
+| Tool | Description |
+|------|-------------|
+| `rah_list_guides` | List all available guides |
+| `rah_read_guide` | Read a specific guide's content |
+| `rah_write_guide` | Create or update a guide |
 
 ---
 
@@ -105,6 +113,57 @@ RA-H Light provides 11 MCP tools for external agents:
 
 ---
 
+## Guides
+
+Guides are markdown documents stored in `src/config/guides/` that help external AI agents understand your knowledge base context, conventions, and usage patterns.
+
+### Why Guides?
+
+When an external agent (like Claude Code) connects to RA-H via MCP, it has access to tools but lacks context about:
+- How your knowledge base is organized
+- What dimensions mean in your system
+- Best practices for creating/linking nodes
+- Your specific workflows and conventions
+
+Guides bridge this gap by providing structured documentation that agents can read.
+
+### Managing Guides
+
+**Via UI:**
+1. Open Settings (gear icon)
+2. Click the "Guides" tab
+3. Create, edit, or delete guides
+
+**Via Pane:**
+- Click the Guides icon in the left toolbar
+- Browse and read guides directly
+
+### Built-in Guides
+
+| Guide | Purpose |
+|-------|---------|
+| `connect` | How to find and create connections between nodes |
+| `integrate` | Deep analysis and integration patterns |
+| `prep` | Preparing content for the knowledge base |
+| `research` | Research workflow patterns |
+| `survey` | Survey and discovery patterns |
+
+### Creating Custom Guides
+
+Guides use markdown with optional YAML frontmatter:
+
+```markdown
+---
+description: Brief description shown in guide list
+---
+
+# Guide Title
+
+Your guide content here...
+```
+
+---
+
 ## API Routes
 
 RA-H Light exposes REST APIs that MCP tools call internally:
@@ -118,52 +177,14 @@ RA-H Light exposes REST APIs that MCP tools call internally:
 | `/api/edges/[id]` | GET/PUT/DELETE | Edge CRUD |
 | `/api/dimensions` | GET/POST | List/create dimensions |
 | `/api/dimensions/search` | GET | Search dimensions |
-| `/api/workflows/execute` | POST | Execute workflow |
-
----
-
-## Workflows
-
-Workflows are pre-written instruction sets stored in `~/Library/Application Support/RA-H/workflows/`.
-
-### Workflow Format
-
-```json
-{
-  "key": "integrate",
-  "displayName": "Integrate",
-  "description": "Deep analysis and connection-building for focused node",
-  "instructions": "You are executing the INTEGRATE workflow...",
-  "enabled": true,
-  "requiresFocusedNode": true
-}
-```
-
-### Executing Workflows
-
-Via API:
-```bash
-curl -X POST http://localhost:3000/api/workflows/execute \
-  -H "Content-Type: application/json" \
-  -d '{"workflow_key": "integrate", "focused_node_id": 123}'
-```
-
-### Built-in Workflows
-
-**Integrate** — Database-wide connection discovery. Finds related nodes and suggests connections.
-
-### Creating Custom Workflows
-
-1. Create a JSON file in `~/Library/Application Support/RA-H/workflows/`
-2. Define key, displayName, description, instructions
-3. Set `enabled: true`
-4. Execute via API
+| `/api/guides` | GET | List guides |
+| `/api/guides/[name]` | GET/PUT/DELETE | Guide CRUD |
 
 ---
 
 ## Database Tools (Internal)
 
-These tools are used by the workflow executor and API routes:
+These tools are used by APIs and internal operations:
 
 | Tool | File | Purpose |
 |------|------|---------|
@@ -187,4 +208,5 @@ These tools are used by the workflow executor and API routes:
 | `apps/mcp-server/server.js` | HTTP MCP server |
 | `apps/mcp-server/stdio-server.js` | STDIO MCP server |
 | `src/tools/infrastructure/registry.ts` | Tool registry |
-| `src/services/agents/workflowExecutor.ts` | Workflow execution |
+| `src/services/guides/guideService.ts` | Guide management |
+| `src/config/guides/*.md` | Built-in guides |
