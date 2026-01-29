@@ -43,8 +43,8 @@
         "src/tools/infrastructure/registry.ts no longer imports delegateToWiseRAH",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted delegateToWiseRAH.ts and removed from registry.ts and groups.ts. Also deleted orphaned test scenarios (delegate-wise.ts and delegate-mini.ts) since delegateToMiniRAH was never in the registry."
     },
     {
       "id": "4",
@@ -57,8 +57,8 @@
         "No remaining imports of these components",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "These components were not imported anywhere - clean deletion with no cascading changes needed."
     },
     {
       "id": "5",
@@ -70,8 +70,8 @@
         "app/api/rah/ directory can be deleted if empty after this",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted both routes and the now-empty app/api/rah/ directory. RAHChat.tsx still references the endpoint but will be deleted in Story 7."
     },
     {
       "id": "6",
@@ -84,8 +84,8 @@
         "Chat-related keyboard shortcuts removed (Cmd+J)",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deleted ChatPane.tsx, removed 'chat' from PaneType, updated ThreePanelLayout and LeftToolbar. Default slotB is now null (closed). Changed persisted state keys to v4 to avoid stale 'chat' type in existing user storage."
     },
     {
       "id": "7",
@@ -98,8 +98,8 @@
         "src/components/agents/hooks/useSSEChat.ts deleted",
         "npm run type-check passes"
       ],
-      "passes": false,
-      "notes": "Check if ToolDisplay.tsx is used elsewhere before deleting"
+      "passes": true,
+      "notes": "Deleted all chat components: RAHChat.tsx, TerminalInput.tsx, TerminalMessage.tsx, useSSEChat.ts, ReasoningTrace.tsx, ToolDisplay.tsx. Simplified WorkflowsPane to show MCP integration message instead of chat."
     },
     {
       "id": "8",

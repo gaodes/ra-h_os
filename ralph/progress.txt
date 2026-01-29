@@ -54,3 +54,74 @@ Goal: Strip ra-h_os to lightweight 2-panel UI + MCP server
   - TerminalInput had voice UI (amplitude bars, mic icons) that needed cleanup
   - No imports to these files from other parts of the codebase
 
+## Story 3: Remove orchestration tools (delegateToWiseRAH)
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/tools/orchestration/delegateToWiseRAH.ts
+  - tests/evals/scenarios/delegate-wise.ts
+  - tests/evals/scenarios/delegate-mini.ts
+- Files modified:
+  - src/tools/infrastructure/registry.ts (removed import and references)
+  - src/tools/infrastructure/groups.ts (removed from TOOL_GROUP_ASSIGNMENTS)
+  - tests/evals/scenarios/index.ts (removed deleted test imports)
+- Learnings:
+  - delegateToMiniRAH test also removed since the tool never existed in the registry
+  - The tool was a thin wrapper around WorkflowExecutor, which remains for workflow functionality
+  - Clean removal - no other files depended on this tool
+
+## Story 4: Remove chat agent components
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/components/agents/AgentsPanel.tsx
+  - src/components/agents/MiniRAHPanel.tsx
+  - src/components/agents/WiseRAHPanel.tsx
+- Files modified: None
+- Learnings:
+  - These components were not imported anywhere in the codebase
+  - Clean deletion with no cascading changes needed
+  - AgentsPanel contained ~1100 lines of complex UI for delegation management (now obsolete)
+
+## Story 5: Remove chat API route
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - app/api/rah/chat/route.ts
+  - app/api/rah/usage/route.ts
+  - app/api/rah/ (empty directory)
+- Files modified: None
+- Learnings:
+  - RAHChat.tsx still references /api/rah/chat endpoint (will be deleted in Story 7)
+  - Type-check passes because the endpoint URL is just a string constant
+  - tests/evals/runner.ts also references this endpoint (evals won't work until cleaned up)
+
+## Story 6: Simplify to two-panel layout
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/components/panes/ChatPane.tsx
+- Files modified:
+  - src/components/panes/types.ts (removed 'chat' from PaneType, ChatPaneProps)
+  - src/components/panes/index.ts (removed ChatPane export)
+  - src/components/layout/ThreePanelLayout.tsx (removed chat case, defaults)
+  - src/components/layout/LeftToolbar.tsx (removed chat icon/type)
+- Learnings:
+  - Changed persisted state keys from v3 to v4 to avoid stale 'chat' type in user storage
+  - Default slotB is now null instead of { type: 'chat' }
+  - Cmd+\ now opens node pane instead of chat
+  - Layout still flexible (2-panel with split handle) but chat option removed
+
+## Story 7: Remove RAHChat component
+- Completed: Thu 29 Jan 2026
+- Files deleted:
+  - src/components/agents/RAHChat.tsx
+  - src/components/agents/TerminalInput.tsx
+  - src/components/agents/TerminalMessage.tsx
+  - src/components/agents/hooks/useSSEChat.ts
+  - src/components/helpers/ReasoningTrace.tsx
+  - src/components/helpers/ToolDisplay.tsx
+- Files modified:
+  - src/components/panes/WorkflowsPane.tsx (simplified - removed RAHChat, shows MCP integration message)
+- Learnings:
+  - WorkflowsPane was heavily dependent on RAHChat for delegation detail views
+  - Simplified WorkflowsPane to show a message about MCP integration
+  - ReasoningTrace and ToolDisplay were only used by RAHChat - safe to delete
+  - ~2000 lines of chat UI code removed
+
