@@ -202,45 +202,6 @@ const searchEmbeddingsOutputSchema = {
   )
 };
 
-// rah_extract_url schemas
-const extractUrlInputSchema = {
-  url: z.string().url().describe('URL of the webpage to extract content from')
-};
-
-const extractUrlOutputSchema = {
-  success: z.boolean(),
-  title: z.string(),
-  content: z.string(),
-  chunk: z.string(),
-  metadata: z.record(z.any())
-};
-
-// rah_extract_youtube schemas
-const extractYoutubeInputSchema = {
-  url: z.string().describe('YouTube video URL to extract transcript from')
-};
-
-const extractYoutubeOutputSchema = {
-  success: z.boolean(),
-  title: z.string(),
-  channel: z.string(),
-  transcript: z.string(),
-  metadata: z.record(z.any())
-};
-
-// rah_extract_pdf schemas
-const extractPdfInputSchema = {
-  url: z.string().url().describe('URL of the PDF file to extract content from')
-};
-
-const extractPdfOutputSchema = {
-  success: z.boolean(),
-  title: z.string(),
-  content: z.string(),
-  chunk: z.string(),
-  metadata: z.record(z.any())
-};
-
 const server = new McpServer(serverInfo, { instructions });
 
 function logError(...args) {
@@ -689,90 +650,6 @@ server.registerTool(
           chunkPreview: (r.chunk || r.content || '').slice(0, 200),
           similarity: r.similarity || r.score || 0
         }))
-      }
-    };
-  }
-);
-
-server.registerTool(
-  'rah_extract_url',
-  {
-    title: 'Extract URL content',
-    description: 'Extract content from a webpage URL. Returns title, content, and metadata for creating nodes.',
-    inputSchema: extractUrlInputSchema,
-    outputSchema: extractUrlOutputSchema
-  },
-  async ({ url }) => {
-    const result = await callRaHApi('/api/extract/url', {
-      method: 'POST',
-      body: JSON.stringify({ url })
-    });
-
-    const summary = `Extracted content from: ${result.title || 'webpage'}`;
-    return {
-      content: [{ type: 'text', text: summary }],
-      structuredContent: {
-        success: true,
-        title: result.title || 'Untitled',
-        content: result.content || '',
-        chunk: result.chunk || '',
-        metadata: result.metadata || {}
-      }
-    };
-  }
-);
-
-server.registerTool(
-  'rah_extract_youtube',
-  {
-    title: 'Extract YouTube transcript',
-    description: 'Extract transcript from a YouTube video. Returns title, channel, transcript, and metadata.',
-    inputSchema: extractYoutubeInputSchema,
-    outputSchema: extractYoutubeOutputSchema
-  },
-  async ({ url }) => {
-    const result = await callRaHApi('/api/extract/youtube', {
-      method: 'POST',
-      body: JSON.stringify({ url })
-    });
-
-    const summary = `Extracted transcript from: ${result.title || 'YouTube video'}`;
-    return {
-      content: [{ type: 'text', text: summary }],
-      structuredContent: {
-        success: true,
-        title: result.title || 'Untitled',
-        channel: result.channel || 'Unknown',
-        transcript: result.transcript || '',
-        metadata: result.metadata || {}
-      }
-    };
-  }
-);
-
-server.registerTool(
-  'rah_extract_pdf',
-  {
-    title: 'Extract PDF content',
-    description: 'Extract content from a PDF file URL. Returns title, content, and metadata for creating nodes.',
-    inputSchema: extractPdfInputSchema,
-    outputSchema: extractPdfOutputSchema
-  },
-  async ({ url }) => {
-    const result = await callRaHApi('/api/extract/pdf', {
-      method: 'POST',
-      body: JSON.stringify({ url })
-    });
-
-    const summary = `Extracted content from: ${result.title || 'PDF document'}`;
-    return {
-      content: [{ type: 'text', text: summary }],
-      structuredContent: {
-        success: true,
-        title: result.title || 'Untitled PDF',
-        content: result.content || '',
-        chunk: result.chunk || '',
-        metadata: result.metadata || {}
       }
     };
   }
