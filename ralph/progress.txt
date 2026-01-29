@@ -243,3 +243,29 @@ Goal: Strip ra-h_os to lightweight 2-panel UI + MCP server
   - MCP integration is now the main selling point of RA-H Light
   - Users need clear setup instructions for Claude Code integration
 
+## Story 15: Final verification
+- Completed: Thu 29 Jan 2026
+- Verification results:
+  - npm install: SUCCESS (824 packages, up to date)
+  - npm run type-check: SUCCESS (no errors)
+  - npm run dev: SUCCESS (starts on localhost:3000)
+  - UI loads: SUCCESS (HTML renders with LeftToolbar, nodes panel visible)
+- Summary of RA-H Light:
+  - Total files deleted: ~50+ files across chat, voice, delegation systems
+  - Total lines removed: ~5000+ lines of code
+  - Remaining functionality: nodes/edges/dimensions CRUD, workflows, MCP server (11 tools)
+  - 2-panel layout with nodes list and focus panel
+  - Settings modal with API keys, database viewer, external agents panel
+
+---
+
+# SPRINT COMPLETE
+
+All 15 stories passed. RA-H Light is now a minimal knowledge graph UI with MCP server:
+
+- **Removed:** Chat agents, voice features, delegation system, Anthropic integration
+- **Kept:** Node/Edge/Dimension CRUD, workflows, MCP server, embeddings, search
+- **MCP Tools:** 11 working tools for external AI agents
+- **UI:** 2-panel layout (nodes + focus) with settings modal
+
+Ready for merge to main.
