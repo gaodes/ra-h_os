@@ -73,7 +73,7 @@ export default function ContextViewer() {
   return (
     <div style={containerStyle}>
       <p style={descStyle}>
-        Top 10 most-connected nodes are added to background context for chats and workflows.
+        Top 10 most-connected nodes are added to background context for workflow execution.
       </p>
 
       {/* Toggle */}
