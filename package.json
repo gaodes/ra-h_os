@@ -21,9 +21,7 @@
     "evals": "RAH_EVALS_LOG=1 tsx tests/evals/runner.ts"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.9",
     "@ai-sdk/openai": "^3.0.7",
-    "@ai-sdk/react": "^3.0.29",
     "@langchain/core": "^1.0.1",
     "@langchain/textsplitters": "^1.0.1",
     "@xyflow/react": "^12.10.0",
