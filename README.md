@@ -18,7 +18,6 @@ RA-OS is a stripped-down version of RA-H focused on being a **knowledge manageme
 - **2-panel UI** – Nodes list + focus panel for viewing/editing knowledge
 - **SQLite + sqlite-vec** – Local vector database with semantic search
 - **MCP Server** – Connect Claude Code, Cursor, or any MCP-compatible AI assistant
-- **Workflows** – Editable JSON workflows for multi-step operations
 
 **What's removed:** Built-in chat agents, voice features, delegation system. RA-OS is designed for technical users who want to bring their own AI agents via MCP.
 
