@@ -1,5 +1,50 @@
 # Database Schema
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    nodes ||--o{ node_dimensions : "has"
+    nodes ||--o{ edges : "from"
+    nodes ||--o{ edges : "to"
+    nodes ||--o{ chunks : "contains"
+    dimensions ||--o{ node_dimensions : "tagged_with"
+
+    nodes {
+        INTEGER id PK
+        TEXT title
+        TEXT content
+        TEXT type
+        BLOB embedding
+    }
+
+    edges {
+        INTEGER id PK
+        INTEGER from_node_id FK
+        INTEGER to_node_id FK
+        TEXT context
+        TEXT explanation
+    }
+
+    dimensions {
+        TEXT name PK
+        INTEGER is_priority
+    }
+
+    node_dimensions {
+        INTEGER node_id FK
+        TEXT dimension FK
+    }
+
+    chunks {
+        INTEGER id PK
+        INTEGER node_id FK
+        TEXT text
+    }
+```
+
+---
+
 ## Why SQLite?
 
 RA-H uses **SQLite** for local-first data ownership. Your knowledge stays on your machine - no cloud dependencies. SQLite provides:
