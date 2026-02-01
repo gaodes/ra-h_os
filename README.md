@@ -45,22 +45,41 @@ Open http://localhost:3000 → **Settings → API Keys** → add your OpenAI key
 
 ## Connecting AI Agents via MCP
 
-RA-OS exposes an MCP server that external AI assistants can use to read/write your knowledge graph.
+RA-OS includes an MCP server that lets Claude Code, Cursor, and other AI assistants read/write your knowledge graph.
 
-### Claude Code Integration
+### Quick Setup (Recommended)
 
-Add to your Claude Code settings:
+Add to your `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
-    "rah": {
-      "command": "node",
-      "args": ["/path/to/ra-h_os/apps/mcp-server/stdio-server.js"]
+    "ra-h": {
+      "command": "npx",
+      "args": ["ra-h-mcp-server"]
     }
   }
 }
 ```
+
+**That's it.** Works without RA-OS running. Requires Node.js 18+.
+
+### Alternative: Local Development
+
+If you're developing RA-OS and want to use the local server:
+
+```json
+{
+  "mcpServers": {
+    "ra-h": {
+      "command": "node",
+      "args": ["/path/to/ra-h_os/apps/mcp-server-standalone/index.js"]
+    }
+  }
+}
+```
+
+First install dependencies: `cd apps/mcp-server-standalone && npm install`
 
 ### Available MCP Tools
 
@@ -72,21 +91,27 @@ Add to your Claude Code settings:
 | `rah_get_nodes` | Get nodes by ID |
 | `rah_create_edge` | Connect two nodes |
 | `rah_query_edges` | Find connections |
-| `rah_update_edge` | Update a connection |
+| `rah_list_dimensions` | List all dimensions |
 | `rah_create_dimension` | Create a tag/category |
 | `rah_update_dimension` | Update a dimension |
 | `rah_delete_dimension` | Delete a dimension |
-| `rah_search_embeddings` | Semantic vector search |
 
-### HTTP MCP Server
+### HTTP MCP Server (Real-time UI updates)
 
-For non-stdio clients, start the HTTP server:
+If you want the RA-OS UI to update in real-time when nodes are created:
 
-```bash
-node apps/mcp-server/server.js
+1. Start RA-OS: `npm run dev`
+2. Use HTTP config:
+
+```json
+{
+  "mcpServers": {
+    "ra-h": {
+      "url": "http://127.0.0.1:44145/mcp"
+    }
+  }
+}
 ```
-
-Listens on `http://127.0.0.1:44145/mcp` by default.
 
 ## Project Layout
 
