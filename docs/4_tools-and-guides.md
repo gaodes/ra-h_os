@@ -205,8 +205,9 @@ These tools are used by APIs and internal operations:
 
 | File | Purpose |
 |------|---------|
-| `apps/mcp-server/server.js` | HTTP MCP server |
-| `apps/mcp-server/stdio-server.js` | STDIO MCP server |
+| `apps/mcp-server-standalone/` | **Standalone MCP server (recommended)** |
+| `apps/mcp-server/server.js` | HTTP MCP server (requires app running) |
+| `apps/mcp-server/stdio-server.js` | STDIO bridge to HTTP server |
 | `src/tools/infrastructure/registry.ts` | Tool registry |
 | `src/services/guides/guideService.ts` | Guide management |
 | `src/config/guides/*.md` | Built-in guides |

@@ -62,14 +62,16 @@ RA-OS is designed to be the knowledge backend for your AI workflows:
 {
   "mcpServers": {
     "ra-h": {
-      "command": "node",
-      "args": ["/path/to/ra-h_os/apps/mcp-server/stdio-server.js"]
+      "command": "npx",
+      "args": ["ra-h-mcp-server"]
     }
   }
 }
 ```
 
-Available tools: `rah_add_node`, `rah_search_nodes`, `rah_update_node`, `rah_get_nodes`, `rah_create_edge`, `rah_query_edges`, `rah_update_edge`, `rah_create_dimension`, `rah_update_dimension`, `rah_delete_dimension`, `rah_search_embeddings`
+Add this to `~/.claude.json` and restart Claude. Works without RA-OS running.
+
+Available tools: `rah_add_node`, `rah_search_nodes`, `rah_update_node`, `rah_get_nodes`, `rah_create_edge`, `rah_query_edges`, `rah_list_dimensions`, `rah_create_dimension`, `rah_update_dimension`, `rah_delete_dimension`
 
 ## Documentation
 

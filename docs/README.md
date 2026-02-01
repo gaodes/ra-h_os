@@ -42,20 +42,20 @@ Open http://localhost:3000
 
 ## MCP Integration
 
-Add to your Claude Code config:
+Add to your `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
     "ra-h": {
-      "command": "node",
-      "args": ["/path/to/ra-h_os/apps/mcp-server/stdio-server.js"]
+      "command": "npx",
+      "args": ["ra-h-mcp-server"]
     }
   }
 }
 ```
 
-See [MCP docs](./8_mcp.md) for full setup.
+Works without RA-OS running. See [MCP docs](./8_mcp.md) for alternatives.
 
 ## Questions?
 
