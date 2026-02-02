@@ -11,7 +11,7 @@
 
 A local SQLite database with a UI for storing knowledge, and an MCP server so your AI tools can read/write to it.
 
-**Full documentation:** [ra-h.com/docs](https://ra-h.com/docs)
+**Full documentation:** [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source)
 
 ---
 
@@ -136,7 +136,7 @@ JOIN nodes n2 ON e.to_node_id = n2.id
 LIMIT 10;
 ```
 
-See [ra-h.com/docs/schema](https://ra-h.com/docs/schema) for full schema documentation.
+See [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source) for full schema documentation.
 
 ---
 
@@ -163,6 +163,6 @@ Without sqlite-vec, everything works except semantic/vector search.
 
 ## More
 
-- **Full docs:** [ra-h.com/docs](https://ra-h.com/docs)
+- **Full docs:** [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source)
 - **Issues:** [github.com/bradwmorris/ra-h_os/issues](https://github.com/bradwmorris/ra-h_os/issues)
 - **License:** MIT
