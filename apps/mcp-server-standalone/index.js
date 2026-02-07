@@ -13,23 +13,25 @@ const dimensionService = require('./services/dimensionService');
 // Server info
 const serverInfo = {
   name: 'ra-h-standalone',
-  version: '1.0.0'
+  version: '1.1.0'
 };
 
 const instructions = [
-  'RA-H Knowledge Base - Direct SQLite access.',
-  'Use rah_add_node to create nodes with dimensions.',
-  'Use rah_search_nodes to find existing content before creating duplicates.',
-  'All operations happen locally on this device.'
+  "RA-H is the user's personal knowledge graph — local SQLite, fully on-device.",
+  'Call rah_get_context first to see what\'s in the graph.',
+  'Proactively identify valuable information in conversations and offer to save it.',
+  'Search before creating to avoid duplicates.',
+  'Every edge needs an explanation — why does this connection exist?',
+  'All data stays on this device.'
 ].join(' ');
 
 // Tool schemas
 const addNodeInputSchema = {
-  title: z.string().min(1).max(160).describe('Node title'),
+  title: z.string().min(1).max(160).describe('Clear, descriptive title'),
   content: z.string().max(20000).optional().describe('Node content/notes'),
   link: z.string().url().optional().describe('Source URL'),
-  description: z.string().max(2000).optional().describe('Brief description'),
-  dimensions: z.array(z.string()).min(1).max(5).describe('Categories/tags (1-5 required)'),
+  description: z.string().max(2000).optional().describe('One-sentence summary. Helps search and AI understanding.'),
+  dimensions: z.array(z.string()).min(1).max(5).describe('1-5 categories. Call rah_list_dimensions first to use existing ones.'),
   metadata: z.record(z.any()).optional().describe('Additional metadata'),
   chunk: z.string().max(50000).optional().describe('Full source text')
 };
@@ -56,9 +58,14 @@ const updateNodeInputSchema = {
 };
 
 const createEdgeInputSchema = {
-  sourceId: z.number().int().positive().describe('Source node ID'),
+  sourceId: z.number().int().positive().describe("The 'subject' node (reads: source [explanation] target)"),
   targetId: z.number().int().positive().describe('Target node ID'),
-  explanation: z.string().min(1).describe('Why does this connection exist?')
+  explanation: z.string().min(1).describe("Human-readable explanation. Should read as a sentence: 'Alice invented this technique'")
+};
+
+const updateEdgeInputSchema = {
+  id: z.number().int().positive().describe('Edge ID'),
+  explanation: z.string().min(1).describe('Updated explanation for this connection')
 };
 
 const queryEdgesInputSchema = {
@@ -120,13 +127,45 @@ async function main() {
 
   const server = new McpServer(serverInfo, { instructions });
 
+  // ========== CONTEXT TOOL ==========
+
+  server.registerTool(
+    'rah_get_context',
+    {
+      title: 'Get RA-H context',
+      description: 'Get knowledge graph overview: stats, hub nodes (most connected), dimensions, and recent activity. Call this first to understand the user\'s graph.',
+      inputSchema: {}
+    },
+    async () => {
+      const context = nodeService.getContext();
+
+      // First-run welcome message
+      if (context.stats.nodeCount === 0) {
+        return {
+          content: [{ type: 'text', text: 'Empty knowledge graph. This is a fresh start! Suggest adding the first node about something the user is working on or interested in.' }],
+          structuredContent: {
+            ...context,
+            welcome: true,
+            suggestion: 'Ask the user what they\'re working on or interested in, then create the first node.'
+          }
+        };
+      }
+
+      const summary = `Graph: ${context.stats.nodeCount} nodes, ${context.stats.edgeCount} edges, ${context.stats.dimensionCount} dimensions.`;
+      return {
+        content: [{ type: 'text', text: summary }],
+        structuredContent: context
+      };
+    }
+  );
+
   // ========== NODE TOOLS ==========
 
   server.registerTool(
     'rah_add_node',
     {
       title: 'Add RA-H node',
-      description: 'Create a new node in the local knowledge base.',
+      description: 'Create a new node in the knowledge graph. Always search first (rah_search_nodes) to avoid duplicates.',
       inputSchema: addNodeInputSchema
     },
     async ({ title, content, link, description, dimensions, metadata, chunk }) => {
@@ -163,7 +202,7 @@ async function main() {
     'rah_search_nodes',
     {
       title: 'Search RA-H nodes',
-      description: 'Find existing nodes by keyword search.',
+      description: 'Search the knowledge graph by keyword. Call before creating nodes to check for duplicates.',
       inputSchema: searchNodesInputSchema
     },
     async ({ query, limit = 10, dimensions }) => {
@@ -267,7 +306,7 @@ async function main() {
     'rah_create_edge',
     {
       title: 'Create RA-H edge',
-      description: 'Create a connection between two nodes.',
+      description: 'Connect two nodes. Edges are the most valuable part of the graph — they represent understanding, not just proximity.',
       inputSchema: createEdgeInputSchema
     },
     async ({ sourceId, targetId, explanation }) => {
@@ -284,6 +323,27 @@ async function main() {
           success: true,
           edgeId: edge.id,
           message: `Created edge from #${sourceId} to #${targetId}`
+        }
+      };
+    }
+  );
+
+  server.registerTool(
+    'rah_update_edge',
+    {
+      title: 'Update RA-H edge',
+      description: 'Update an edge explanation. Use when a connection needs a better or corrected explanation.',
+      inputSchema: updateEdgeInputSchema
+    },
+    async ({ id, explanation }) => {
+      const edge = edgeService.updateEdge(id, { explanation: explanation.trim() });
+
+      return {
+        content: [{ type: 'text', text: `Updated edge #${id}` }],
+        structuredContent: {
+          success: true,
+          edgeId: edge.id,
+          message: `Updated edge #${id}`
         }
       };
     }

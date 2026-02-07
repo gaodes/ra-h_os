@@ -38,16 +38,73 @@ function initDatabase() {
 
   const dbPath = getDatabasePath();
 
-  // Check if database exists
+  // Auto-create database if it doesn't exist
   if (!fs.existsSync(dbPath)) {
-    throw new Error(
-      `Database not found at: ${dbPath}\n\n` +
-      `Have you run RA-H at least once? The database is created when you first launch the app.\n\n` +
-      `If your database is in a different location, set the RAH_DB_PATH environment variable.`
-    );
-  }
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    db = new Database(dbPath);
+    console.error('[RA-H] Creating new database at:', dbPath);
 
-  db = new Database(dbPath);
+    // Create core schema
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS nodes (
+        id INTEGER PRIMARY KEY,
+        title TEXT,
+        description TEXT,
+        content TEXT,
+        link TEXT,
+        type TEXT,
+        created_at TEXT,
+        updated_at TEXT,
+        metadata TEXT,
+        chunk TEXT,
+        embedding BLOB,
+        embedding_updated_at TEXT,
+        embedding_text TEXT,
+        chunk_status TEXT DEFAULT 'not_chunked',
+        is_pinned INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS edges (
+        id INTEGER PRIMARY KEY,
+        from_node_id INTEGER NOT NULL,
+        to_node_id INTEGER NOT NULL,
+        source TEXT,
+        created_at TEXT,
+        context TEXT,
+        user_feedback INTEGER,
+        FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+        FOREIGN KEY (to_node_id) REFERENCES nodes(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_node_id);
+      CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_node_id);
+
+      CREATE TABLE IF NOT EXISTS node_dimensions (
+        node_id INTEGER NOT NULL,
+        dimension TEXT NOT NULL,
+        PRIMARY KEY (node_id, dimension),
+        FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+      ) WITHOUT ROWID;
+      CREATE INDEX IF NOT EXISTS idx_dim_by_dimension ON node_dimensions(dimension, node_id);
+      CREATE INDEX IF NOT EXISTS idx_dim_by_node ON node_dimensions(node_id, dimension);
+
+      CREATE TABLE IF NOT EXISTS dimensions (
+        name TEXT PRIMARY KEY,
+        is_priority INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Seed default dimensions
+      INSERT OR IGNORE INTO dimensions (name, is_priority) VALUES ('research', 1);
+      INSERT OR IGNORE INTO dimensions (name, is_priority) VALUES ('ideas', 1);
+      INSERT OR IGNORE INTO dimensions (name, is_priority) VALUES ('projects', 1);
+      INSERT OR IGNORE INTO dimensions (name, is_priority) VALUES ('memory', 1);
+      INSERT OR IGNORE INTO dimensions (name, is_priority) VALUES ('preferences', 1);
+    `);
+
+    console.error('[RA-H] Database created successfully');
+  } else {
+    db = new Database(dbPath);
+  }
 
   // Configure SQLite for performance
   db.pragma('journal_mode = WAL');

@@ -241,11 +241,50 @@ function getNodeCount() {
   return Number(rows[0].count);
 }
 
+/**
+ * Get knowledge graph context overview.
+ * Returns stats, hub nodes, dimensions, and recent activity.
+ */
+function getContext() {
+  const nodeCount = query('SELECT COUNT(*) as count FROM nodes')[0].count;
+  const edgeCount = query('SELECT COUNT(*) as count FROM edges')[0].count;
+
+  const dimensionService = require('./dimensionService');
+  const dimensions = dimensionService.getDimensions();
+
+  const recentNodes = query(`
+    SELECT n.id, n.title, n.description,
+           GROUP_CONCAT(nd.dimension) as dimensions
+    FROM nodes n
+    LEFT JOIN node_dimensions nd ON n.id = nd.node_id
+    GROUP BY n.id
+    ORDER BY n.created_at DESC
+    LIMIT 5
+  `);
+
+  const hubNodes = query(`
+    SELECT n.id, n.title, n.description, COUNT(e.id) as edge_count
+    FROM nodes n
+    LEFT JOIN edges e ON n.id = e.from_node_id OR n.id = e.to_node_id
+    GROUP BY n.id
+    ORDER BY edge_count DESC
+    LIMIT 5
+  `);
+
+  return {
+    stats: { nodeCount, edgeCount, dimensionCount: dimensions.length },
+    dimensions,
+    recentNodes,
+    hubNodes
+  };
+}
+
 module.exports = {
   getNodes,
   getNodeById,
   createNode,
   updateNode,
   deleteNode,
-  getNodeCount
+  getNodeCount,
+  getContext
 };
