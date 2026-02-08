@@ -129,6 +129,10 @@ Available tools:
 | `rah_create_dimension` | Create a new dimension |
 | `rah_update_dimension` | Update/rename a dimension |
 | `rah_delete_dimension` | Delete a dimension |
+| `rah_list_guides` | List available guides (system + custom) |
+| `rah_read_guide` | Read a guide by name |
+| `rah_write_guide` | Create or update a custom guide |
+| `rah_delete_guide` | Delete a custom guide |
 
 **Example prompts for Claude Code:**
 - "What's in my knowledge graph?"

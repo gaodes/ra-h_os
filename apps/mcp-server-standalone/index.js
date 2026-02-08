@@ -9,11 +9,12 @@ const { initDatabase, getDatabasePath, closeDatabase } = require('./services/sql
 const nodeService = require('./services/nodeService');
 const edgeService = require('./services/edgeService');
 const dimensionService = require('./services/dimensionService');
+const guideService = require('./services/guideService');
 
 // Server info
 const serverInfo = {
   name: 'ra-h-standalone',
-  version: '1.1.0'
+  version: '1.2.0'
 };
 
 const instructions = [
@@ -22,6 +23,7 @@ const instructions = [
   'Proactively identify valuable information in conversations and offer to save it.',
   'Search before creating to avoid duplicates.',
   'Every edge needs an explanation — why does this connection exist?',
+  'Guides are detailed instruction sets — call rah_list_guides when you need procedural help.',
   'All data stays on this device.'
 ].join(' ');
 
@@ -92,6 +94,19 @@ const deleteDimensionInputSchema = {
   name: z.string().min(1).describe('Dimension name to delete')
 };
 
+const readGuideInputSchema = {
+  name: z.string().min(1).describe('Guide name (e.g. "edges", "creating-nodes", "schema")')
+};
+
+const writeGuideInputSchema = {
+  name: z.string().min(1).describe('Guide name (lowercase, no spaces)'),
+  content: z.string().min(1).describe('Full markdown content including YAML frontmatter (name, description)')
+};
+
+const deleteGuideInputSchema = {
+  name: z.string().min(1).describe('Guide name to delete')
+};
+
 // Helper to sanitize dimensions
 function sanitizeDimensions(raw) {
   if (!Array.isArray(raw)) return [];
@@ -138,6 +153,8 @@ async function main() {
     },
     async () => {
       const context = nodeService.getContext();
+      const guides = guideService.listGuides();
+      context.guides = guides.map(g => ({ name: g.name, description: g.description, immutable: g.immutable }));
 
       // First-run welcome message
       if (context.stats.nodeCount === 0) {
@@ -151,7 +168,7 @@ async function main() {
         };
       }
 
-      const summary = `Graph: ${context.stats.nodeCount} nodes, ${context.stats.edgeCount} edges, ${context.stats.dimensionCount} dimensions.`;
+      const summary = `Graph: ${context.stats.nodeCount} nodes, ${context.stats.edgeCount} edges, ${context.stats.dimensionCount} dimensions, ${guides.length} guides.`;
       return {
         content: [{ type: 'text', text: summary }],
         structuredContent: context
@@ -467,6 +484,99 @@ async function main() {
         structuredContent: {
           success: true,
           message: `Deleted dimension: ${name}`
+        }
+      };
+    }
+  );
+
+  // ========== GUIDE TOOLS ==========
+
+  server.registerTool(
+    'rah_list_guides',
+    {
+      title: 'List RA-H guides',
+      description: 'List available guides — detailed instruction sets for working with the knowledge graph. Includes system guides (immutable) and user-created guides.',
+      inputSchema: {}
+    },
+    async () => {
+      const guides = guideService.listGuides();
+
+      return {
+        content: [{ type: 'text', text: `Found ${guides.length} guide(s).` }],
+        structuredContent: {
+          count: guides.length,
+          guides
+        }
+      };
+    }
+  );
+
+  server.registerTool(
+    'rah_read_guide',
+    {
+      title: 'Read RA-H guide',
+      description: 'Read a guide by name. Returns full markdown content with procedural instructions.',
+      inputSchema: readGuideInputSchema
+    },
+    async ({ name }) => {
+      const guide = guideService.readGuide(name);
+
+      if (!guide) {
+        throw new Error(`Guide "${name}" not found. Call rah_list_guides to see available guides.`);
+      }
+
+      return {
+        content: [{ type: 'text', text: guide.content }],
+        structuredContent: guide
+      };
+    }
+  );
+
+  server.registerTool(
+    'rah_write_guide',
+    {
+      title: 'Write RA-H guide',
+      description: 'Create or update a custom guide. System guides cannot be modified. Content should be markdown with YAML frontmatter (name, description).',
+      inputSchema: writeGuideInputSchema
+    },
+    async ({ name, content }) => {
+      const result = guideService.writeGuide(name, content);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return {
+        content: [{ type: 'text', text: `Guide "${name}" saved.` }],
+        structuredContent: {
+          success: true,
+          name,
+          message: `Guide "${name}" saved.`
+        }
+      };
+    }
+  );
+
+  server.registerTool(
+    'rah_delete_guide',
+    {
+      title: 'Delete RA-H guide',
+      description: 'Delete a custom guide. System guides cannot be deleted.',
+      inputSchema: deleteGuideInputSchema
+    },
+    async ({ name }) => {
+      const result = guideService.deleteGuide(name);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return {
+        content: [{ type: 'text', text: `Guide "${name}" deleted.` }],
+        structuredContent: {
+          success: true,
+          name,
+          message: `Guide "${name}" deleted.`
         }
       };
     }

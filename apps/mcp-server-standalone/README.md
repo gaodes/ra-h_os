@@ -61,6 +61,16 @@ Once connected, Claude will:
 | `rah_create_dimension` | Create a dimension |
 | `rah_update_dimension` | Update/rename a dimension |
 | `rah_delete_dimension` | Delete a dimension |
+| `rah_list_guides` | List available guides (system + custom) |
+| `rah_read_guide` | Read a guide by name |
+| `rah_write_guide` | Create or update a custom guide |
+| `rah_delete_guide` | Delete a custom guide |
+
+## Guides
+
+Guides are detailed instruction sets that teach Claude how to work with your knowledge base. System guides (schema, creating-nodes, edges, dimensions, extract) are bundled and immutable. You can create up to 10 custom guides for your own workflows.
+
+Guides are stored at `~/Library/Application Support/RA-H/guides/` and shared with the main app.
 
 ## What's NOT Included
 
