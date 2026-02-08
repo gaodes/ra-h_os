@@ -278,60 +278,25 @@
   "backlog": [
     {
       "id": "B1",
-      "title": "Extraction tools restoration",
-      "description": "Re-implement extraction tools (URL, YouTube, PDF) that were removed in Story 13 because API routes didn't exist. Build standalone extraction in the MCP server that doesn't depend on Next.js API routes.",
+      "title": "Rename 'content' cell to 'notes' in nodes table",
+      "description": "Rename the 'content' column in the nodes table to 'notes' across the full stack: database schema, migration, services, API routes, MCP tools, UI components, and guides. Coordinate with the packaged Mac app schema.",
       "priority": 1,
       "status": "pending"
     },
     {
       "id": "B2",
-      "title": "Workflow execution via MCP",
-      "description": "Ensure workflows can be triggered and monitored through MCP tools. Currently workflows depend on Next.js API routes - consider making them work standalone.",
+      "title": "Temporal awareness for agents",
+      "description": "Give MCP-connected agents better temporal awareness of knowledge in the graph. Research best practices for datetime storage in SQLite and temporal querying patterns for LLM agents. Two approaches to evaluate: (1) Add a dedicated datetime column (e.g. created_at / captured_at) to the nodes table — requires an ALTER TABLE migration which is sensitive because the Mac app ships with a fixed schema. (2) Store temporal metadata in an existing metadata/JSON column to avoid schema changes. Research should cover: ISO 8601 vs Unix timestamps, timezone handling, how agents should query by time range, how to surface recency in MCP tool responses (e.g. rah_search_nodes returning temporal context), and how the start-here guide should instruct agents on temporal queries. Must coordinate with the packaged Mac app to ensure schema compatibility. Do this task directly after B1 (rename content→notes) since both touch the nodes table.",
       "priority": 2,
-      "status": "pending"
+      "status": "pending",
+      "dependsOn": "B1"
     },
     {
       "id": "B3",
-      "title": "Dimension management in UI",
-      "description": "Verify dimension CRUD works end-to-end in the 2-panel UI. Ensure dimension sidebar, creation, editing, and deletion all function correctly after the stripdown.",
-      "priority": 3,
-      "status": "pending"
-    },
-    {
-      "id": "B4",
-      "title": "Edge visualization and management",
-      "description": "Improve edge visibility in the UI. Currently edges exist in the database but may not be well-surfaced in the 2-panel layout. Consider a graph view or edge list in the focus panel.",
-      "priority": 4,
-      "status": "pending"
-    },
-    {
-      "id": "B5",
       "title": "MCP stress test and efficiency audit",
       "description": "Thorough hands-on stress testing of the entire MCP structure: guides, tools, and configuration. Spend extended time using Claude Code with the database to exercise every tool and guide path. Identify overlap between tools, redundant guide content, inefficient tool descriptions, and gaps in coverage. Look for: tools that could be combined, guide content that duplicates tool descriptions, MCP instructions that conflict or confuse agents, tool parameters that are unclear, missing error handling, and edge cases that break. Goal is a lean, efficient MCP config where every tool and guide earns its place.",
-      "priority": 5,
+      "priority": 3,
       "status": "pending"
-    },
-    {
-      "id": "B6",
-      "title": "npx package publishing",
-      "description": "Publish mcp-server-standalone as an npm package so users can run it via npx ra-h-mcp-server instead of cloning the repo. Set up package.json, bin entry, and npm publishing workflow.",
-      "priority": 6,
-      "status": "pending"
-    },
-    {
-      "id": "B7",
-      "title": "Rename 'content' cell to 'notes' in nodes table",
-      "description": "Rename the 'content' column in the nodes table to 'notes' across the full stack: database schema, migration, services, API routes, MCP tools, UI components, and guides. Coordinate with the packaged Mac app schema.",
-      "priority": 7,
-      "status": "pending"
-    },
-    {
-      "id": "B8",
-      "title": "Temporal awareness for agents",
-      "description": "Give MCP-connected agents better temporal awareness of knowledge in the graph. Research best practices for datetime storage in SQLite and temporal querying patterns for LLM agents. Two approaches to evaluate: (1) Add a dedicated datetime column (e.g. created_at / captured_at) to the nodes table — requires an ALTER TABLE migration which is sensitive because the Mac app ships with a fixed schema. (2) Store temporal metadata in an existing metadata/JSON column to avoid schema changes. Research should cover: ISO 8601 vs Unix timestamps, timezone handling, how agents should query by time range, how to surface recency in MCP tool responses (e.g. rah_search_nodes returning temporal context), and how the start-here guide should instruct agents on temporal queries. Must coordinate with the packaged Mac app to ensure schema compatibility. Do this task directly after B7 (rename content→notes) since both touch the nodes table.",
-      "priority": 8,
-      "status": "pending",
-      "dependsOn": "B7"
     }
   ]
 }
