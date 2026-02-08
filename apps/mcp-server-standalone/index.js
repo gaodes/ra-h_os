@@ -22,7 +22,10 @@ const instructions = [
   'Call rah_get_context first for a quick orientation (stats, hubs, dimensions).',
   'For simple tasks (add a node, search), the tool descriptions have everything you need — just execute.',
   'For complex or ambiguous tasks, also call rah_read_guide("start-here") for full graph understanding.',
-  'Proactively identify valuable information in conversations and offer to save it.',
+  'Knowledge capture: after substantive exchanges, offer to save valuable information.',
+  'Triggers: a new insight emerges, a decision is made, a person/entity/concept is discussed in depth, research or references are shared, a connection to existing knowledge surfaces.',
+  'When offering, propose a specific node — title, dimensions, one-line description — so the user can approve with minimal friction.',
+  'Don\'t ask "should I save this?" — instead say "I\'d add this as: [title] in [dimensions] — want me to?"',
   'Search before creating to avoid duplicates.',
   'All data stays on this device.'
 ].join(' ');
