@@ -1,6 +1,29 @@
 #!/usr/bin/env node
 'use strict';
 
+// Check Node version early — better-sqlite3 native bindings don't support bleeding-edge Node
+const nodeVersion = parseInt(process.versions.node.split('.')[0], 10);
+if (nodeVersion >= 24) {
+  console.error(`[ra-h-mcp-server] ERROR: Node.js v${process.versions.node} is not supported.`);
+  console.error('[ra-h-mcp-server] better-sqlite3 requires Node 18-22 LTS. Install Node 22:');
+  console.error('[ra-h-mcp-server]   nvm install 22 && nvm use 22');
+  console.error('[ra-h-mcp-server]   or: brew install node@22');
+  process.exit(1);
+}
+
+let Database;
+try {
+  Database = require('better-sqlite3');
+} catch (err) {
+  console.error('[ra-h-mcp-server] ERROR: Failed to load better-sqlite3 native module.');
+  console.error(`[ra-h-mcp-server] Node version: ${process.versions.node}`);
+  console.error('[ra-h-mcp-server] This usually means the native bindings need rebuilding:');
+  console.error('[ra-h-mcp-server]   npm rebuild better-sqlite3');
+  console.error('[ra-h-mcp-server] Or your Node version is too new. Use Node 18-22 LTS.');
+  console.error('[ra-h-mcp-server] Original error:', err.message);
+  process.exit(1);
+}
+
 const { z } = require('zod');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
@@ -14,7 +37,7 @@ const guideService = require('./services/guideService');
 // Server info
 const serverInfo = {
   name: 'ra-h-standalone',
-  version: '1.4.0'
+  version: '1.4.1'
 };
 
 const instructions = [
