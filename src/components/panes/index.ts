@@ -1,5 +1,4 @@
 export { default as NodePane } from './NodePane';
-export { default as GuidesPane } from './GuidesPane';
 export { default as DimensionsPane } from './DimensionsPane';
 export { default as MapPane } from './MapPane';
 export { default as ViewsPane } from './ViewsPane';

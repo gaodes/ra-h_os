@@ -25,8 +25,8 @@ type AgentDelegation = {
 import LeftToolbar from './LeftToolbar';
 import SplitHandle from './SplitHandle';
 
-// Pane components (ChatPane removed in rah-light)
-import { NodePane, GuidesPane, DimensionsPane, MapPane, ViewsPane } from '../panes';
+// Pane components (ChatPane removed in rah-light, GuidesPane moved to settings)
+import { NodePane, DimensionsPane, MapPane, ViewsPane } from '../panes';
 import QuickAddInput from '../agents/QuickAddInput';
 import type { PaneType, SlotState, PaneAction } from '../panes/types';
 
@@ -46,6 +46,16 @@ export default function ThreePanelLayout() {
 
   // SlotB width as percentage (when open)
   const [slotBWidth, setSlotBWidth] = usePersistentState<number>('ui.slotBWidth', 50);
+
+  // Migration: if a slot was persisted with type 'guides' (now moved to settings), reset it
+  useEffect(() => {
+    if (slotA && (slotA.type as string) === 'guides') {
+      setSlotA({ type: 'views' });
+    }
+    if (slotB && (slotB.type as string) === 'guides') {
+      setSlotB(null);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track which pane is active (last interacted with)
   const [activePane, setActivePane] = useState<'A' | 'B'>('A');
@@ -806,17 +816,7 @@ export default function ThreePanelLayout() {
         );
 
       // case 'chat' removed in rah-light
-
-      case 'guides':
-        return (
-          <GuidesPane
-            slot={slot}
-            isActive={isActive}
-            onPaneAction={slot === 'A' ? handleSlotAAction : handleSlotBAction}
-            onCollapse={onCollapse}
-            onSwapPanes={slotB ? handleSwapPanes : undefined}
-          />
-        );
+      // case 'guides' removed — moved to settings modal
 
       case 'dimensions':
         return (
