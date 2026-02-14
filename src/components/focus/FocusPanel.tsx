@@ -107,7 +107,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const [chunkExpanded, setChunkExpanded] = useState<{ [key: number]: boolean }>({});
   
   // Edges expand/collapse state
-  const [edgesExpanded, setEdgesExpanded] = useState<{ [key: number]: boolean }>({});
+  // edgesExpanded removed — all connections shown in Edges tab
   
   // Connections section collapsed state (default closed)
   const [edgeSearchOpen, setEdgeSearchOpen] = useState(false);
@@ -1369,208 +1369,202 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
           </div>
         )}
 
-        {/* Existing Connections */}
+        {/* Connections List */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ fontSize: '12px', color: '#737373', marginBottom: '12px', letterSpacing: '0.02em' }}>
-            Existing Connections
-          </div>
           {loadingEdges.has(activeTab) ? (
-            <div style={{ color: '#777', fontSize: '12px', fontStyle: 'italic' }}>Loading connections…</div>
+            <div style={{ color: '#555', fontSize: '12px', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>Loading connections…</div>
           ) : (() => {
             const list = edgesData[activeTab] || [];
             if (list.length === 0) {
-              return <div style={{ color: '#777', fontSize: '12px', fontStyle: 'italic' }}>No connections yet. Search above to add one.</div>;
+              return <div style={{ color: '#555', fontSize: '12px', fontStyle: 'italic', padding: '16px 0', textAlign: 'center' }}>No connections yet.</div>;
             }
-            const visible = edgesExpanded[activeTab] ? list : list.slice(0, 5);
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {visible.map((connection) => (
-                  <div key={connection.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {/* Direction arrow: → if current node is FROM (outgoing), ← if current node is TO (incoming) */}
-                        <span style={{
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {list.map((connection) => (
+                  <div
+                    key={connection.id}
+                    style={{
+                      padding: '6px 0',
+                      borderBottom: '1px solid #141414',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      minWidth: 0,
+                    }}
+                  >
+                    {/* Row 1: arrow + ID + icon + title + delete */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                      <span style={{
+                        fontSize: '11px',
+                        color: connection.edge.from_node_id === activeTab ? '#22c55e' : '#f59e0b',
+                        fontWeight: 600,
+                        width: '14px',
+                        textAlign: 'center',
+                        flexShrink: 0,
+                      }}>
+                        {connection.edge.from_node_id === activeTab ? '→' : '←'}
+                      </span>
+                      <span style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        color: '#000',
+                        background: '#22c55e',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        flexShrink: 0,
+                        fontFamily: "'SF Mono', 'Fira Code', monospace",
+                      }}>
+                        {connection.connected_node.id}
+                      </span>
+                      <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                        {getNodeIcon(connection.connected_node, dimensionIcons, 12)}
+                      </span>
+                      <span
+                        onClick={() => onNodeClick?.(connection.connected_node.id)}
+                        style={{
                           fontSize: '12px',
-                          color: connection.edge.from_node_id === activeTab ? '#22c55e' : '#f59e0b',
-                          fontWeight: 600,
-                          width: '16px',
-                          textAlign: 'center'
-                        }}>
-                          {connection.edge.from_node_id === activeTab ? '→' : '←'}
-                        </span>
-                        <span style={{
-                          display: 'inline-block',
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          color: '#000',
-                          background: '#22c55e',
-                          padding: '2px 6px',
-                          borderRadius: '6px',
-                          minWidth: '20px',
-                          textAlign: 'center',
-                          letterSpacing: '0.05em'
-                        }}>
-                          {connection.connected_node.id}
-                        </span>
-                        <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                          {getNodeIcon(connection.connected_node, dimensionIcons, 12)}
-                        </span>
-                        <span style={{ color: '#f8fafc', fontSize: '13px', fontWeight: 500 }}>{connection.connected_node.title}</span>
-                      </div>
-                      {edgeEditingId === connection.edge.id ? (
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <input
-                            value={edgeEditingValue}
-                            onChange={(e) => setEdgeEditingValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                saveEdgeExplanation(connection.edge.id, connection.edge.context);
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                cancelEditEdgeExplanation();
-                              }
-                            }}
-                            style={{
-                              flex: 1,
-                              fontSize: '11px',
-                              color: '#ddd',
-                              background: 'transparent',
-                              border: '1px solid #1a1a1a',
-                              borderRadius: '0',
-                              padding: '4px',
-                              outline: 'none',
-                              fontFamily: 'inherit'
-                            }}
-                            placeholder="Add explanation…"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => saveEdgeExplanation(connection.edge.id, connection.edge.context)}
-                            disabled={edgeSavingId === connection.edge.id}
-                            style={{
-                              fontSize: '10px',
-                              color: edgeSavingId === connection.edge.id ? '#555' : '#999',
-                              background: 'transparent',
-                              border: '1px solid #222',
-                              borderRadius: '2px',
-                              padding: '3px 6px',
-                              cursor: edgeSavingId === connection.edge.id ? 'not-allowed' : 'pointer'
-                            }}
-                          >
-                            {edgeSavingId === connection.edge.id ? 'saving…' : 'save'}
-                          </button>
-                          <button
-                            onClick={cancelEditEdgeExplanation}
-                            disabled={edgeSavingId === connection.edge.id}
-                            style={{
-                              fontSize: '10px',
-                              color: '#666',
-                              background: 'transparent',
-                              border: 'none',
-                              padding: '3px 4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {typeof connection.edge.context?.type === 'string' && (
-                            <span style={{
-                              fontSize: '10px',
-                              color: '#a3a3a3',
-                              background: '#1f1f1f',
-                              border: '1px solid #262626',
-                              padding: '2px 6px',
-                              borderRadius: '999px',
-                              textTransform: 'none'
-                            }}>
-                              {String(connection.edge.context.type).replace(/_/g, ' ')}
-                            </span>
-                          )}
-                          {connection.edge.context?.explanation ? (
-                            <span
-                              style={{
-                                color: '#94a3b8',
-                                fontSize: '12px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                minWidth: 0,
-                              }}
-                              title={String(connection.edge.context.explanation)}
-                            >
-                              — {connection.edge.context.explanation}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#64748b', fontSize: '12px', fontStyle: 'italic' }}>No explanation</span>
-                          )}
-                          <button
-                            onClick={() => startEditEdgeExplanation(connection.edge.id, connection.edge.context?.explanation)}
-                            style={{
-                              fontSize: '11px',
-                              color: '#94a3b8',
-                              background: 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              textDecoration: 'underline'
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.color = '#cbd5f5'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; }}
-                          >
-                            edit
-                          </button>
-                        </div>
-                      )}
+                          color: '#e5e5e5',
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                          minWidth: 0,
+                          cursor: 'pointer',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = '#22c55e'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = '#e5e5e5'; }}
+                      >
+                        {connection.connected_node.title}
+                      </span>
+                      <button
+                        onClick={() => deleteEdge(connection.edge.id)}
+                        disabled={deletingEdge === connection.edge.id}
+                        style={{
+                          color: '#444',
+                          fontSize: '14px',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: deletingEdge === connection.edge.id ? 'not-allowed' : 'pointer',
+                          padding: '0 2px',
+                          flexShrink: 0,
+                          lineHeight: 1,
+                        }}
+                        onMouseEnter={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = '#dc2626'; }}
+                        onMouseLeave={(e) => { if (deletingEdge !== connection.edge.id) e.currentTarget.style.color = '#444'; }}
+                      >
+                        {deletingEdge === connection.edge.id ? '...' : '×'}
+                      </button>
                     </div>
-                    <button
-                      onClick={() => deleteEdge(connection.edge.id)}
-                      disabled={deletingEdge === connection.edge.id}
-                      style={{
-                        color: deletingEdge === connection.edge.id ? '#64748b' : '#94a3b8',
-                        fontSize: '12px',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: deletingEdge === connection.edge.id ? 'not-allowed' : 'pointer',
-                        padding: '2px 4px',
-                        transition: 'color 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (deletingEdge !== connection.edge.id) {
-                          e.currentTarget.style.color = '#dc2626';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (deletingEdge !== connection.edge.id) {
-                          e.currentTarget.style.color = '#94a3b8';
-                        }
-                      }}
-                    >
-                      {deletingEdge === connection.edge.id ? '...' : '×'}
-                    </button>
+                    {/* Row 2: type chip + explanation (compact, single line) */}
+                    {edgeEditingId === connection.edge.id ? (
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', paddingLeft: '20px' }}>
+                        <input
+                          value={edgeEditingValue}
+                          onChange={(e) => setEdgeEditingValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveEdgeExplanation(connection.edge.id, connection.edge.context);
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelEditEdgeExplanation();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            fontSize: '11px',
+                            color: '#ddd',
+                            background: '#111',
+                            border: '1px solid #2a2a2a',
+                            borderRadius: '4px',
+                            padding: '3px 6px',
+                            outline: 'none',
+                            fontFamily: 'inherit',
+                            minWidth: 0,
+                          }}
+                          placeholder="Add explanation…"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => saveEdgeExplanation(connection.edge.id, connection.edge.context)}
+                          disabled={edgeSavingId === connection.edge.id}
+                          style={{
+                            fontSize: '10px',
+                            color: '#000',
+                            background: '#22c55e',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            cursor: edgeSavingId === connection.edge.id ? 'not-allowed' : 'pointer',
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {edgeSavingId === connection.edge.id ? '...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={cancelEditEdgeExplanation}
+                          style={{
+                            fontSize: '10px',
+                            color: '#666',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '3px 4px',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => startEditEdgeExplanation(connection.edge.id, connection.edge.context?.explanation)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          paddingLeft: '20px',
+                          cursor: 'pointer',
+                          minWidth: 0,
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+                      >
+                        {typeof connection.edge.context?.type === 'string' && (
+                          <span style={{
+                            fontSize: '9px',
+                            color: '#888',
+                            background: '#1a1a1a',
+                            border: '1px solid #222',
+                            padding: '1px 5px',
+                            borderRadius: '999px',
+                            flexShrink: 0,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {String(connection.edge.context.type).replace(/_/g, ' ')}
+                          </span>
+                        )}
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: connection.edge.context?.explanation ? '#777' : '#444',
+                            fontStyle: connection.edge.context?.explanation ? 'normal' : 'italic',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                          title={String(connection.edge.context?.explanation || '')}
+                        >
+                          {(connection.edge.context?.explanation as string) || 'Add explanation...'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
-                {list.length > 5 && (
-                  <div style={{ marginTop: '6px' }}>
-                    <button
-                      onClick={() => setEdgesExpanded(prev => ({ ...prev, [activeTab]: !prev[activeTab] }))}
-                      style={{
-                        fontSize: '9px',
-                        color: '#666',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'color 0.2s'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = '#999'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = '#666'; }}
-                    >
-                      {edgesExpanded[activeTab] ? 'show less' : `show ${list.length - 5} more`}
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })()}
