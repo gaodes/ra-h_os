@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const rawContent = typeof body.content === 'string' ? body.content : null;
+    const rawNotes = typeof body.notes === 'string' ? body.notes : null;
 
     // Process provided dimensions first (needed for description generation)
     const providedDimensions = Array.isArray(body.dimensions) ? body.dimensions : [];
@@ -74,10 +74,9 @@ export async function POST(request: NextRequest) {
     try {
       nodeDescription = await generateDescription({
         title: body.title,
-        content: rawContent || undefined,
+        notes: rawNotes || undefined,
         link: body.link || undefined,
         metadata: body.metadata,
-        type: body.type,
         dimensions: trimmedProvidedDimensions
       });
     } catch (error) {
@@ -88,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Auto-assign locked dimensions + keyword dimensions for all new nodes
     const { locked, keywords } = await DimensionService.assignDimensions({
       title: body.title,
-      content: rawContent || undefined,
+      notes: rawNotes || undefined,
       link: body.link,
       description: nodeDescription
     });
@@ -107,15 +106,15 @@ export async function POST(request: NextRequest) {
 
     if (chunkToStore && chunkToStore.trim().length > 0) {
       chunkStatus = 'not_chunked';
-    } else if (!chunkToStore && hasSufficientContent(rawContent)) {
-      chunkToStore = rawContent;
+    } else if (!chunkToStore && hasSufficientContent(rawNotes)) {
+      chunkToStore = rawNotes;
       chunkStatus = 'not_chunked';
     }
 
     const node = await nodeService.createNode({
       title: body.title,
       description: nodeDescription,
-      content: rawContent ?? undefined,
+      notes: rawNotes ?? undefined,
       link: body.link,
       dimensions: finalDimensions,
       chunk: chunkToStore ?? undefined,

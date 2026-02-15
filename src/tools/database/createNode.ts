@@ -6,7 +6,7 @@ export const createNodeTool = tool({
   description: 'Create node with title/content/link and optional dimensions (locked dimensions auto-assigned)',
   inputSchema: z.object({
     title: z.string().describe('The title of the node'),
-    content: z.string().optional().describe('The main content, description, or notes for this node'),
+    notes: z.string().optional().describe('The main notes, description, or notes for this node'),
     link: z.string().optional().describe('A URL link to the source'),
     dimensions: z
       .array(z.string())

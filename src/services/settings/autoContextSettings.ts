@@ -68,7 +68,7 @@ function bootstrapFromLegacyPins(): void {
   try {
     const db = getSQLiteClient();
     const countRow = db
-      .query<{ count: number }>('SELECT COUNT(*) as count FROM nodes WHERE is_pinned = 1')
+      .query<{ count: number }>('SELECT COUNT(*) as count FROM nodes WHERE 1=0 /* /* is_pinned removed */ removed */')
       .rows[0];
     const pinnedCount = Number(countRow?.count ?? 0);
     if (pinnedCount > 0) {

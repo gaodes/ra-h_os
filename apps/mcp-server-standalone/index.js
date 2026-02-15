@@ -310,7 +310,7 @@ async function main() {
 
       const node = nodeService.createNode({
         title: title.trim(),
-        content: content?.trim(),
+        notes: content?.trim(),
         link: link?.trim(),
         description: description?.trim(),
         dimensions: normalizedDimensions,
@@ -359,7 +359,7 @@ async function main() {
                 WITH fts_matches AS (
                   SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? LIMIT 100
                 )
-                SELECT n.id, n.title, n.description, n.content, n.link, n.updated_at,
+                SELECT n.id, n.title, n.description, n.notes, n.link, n.updated_at,
                        COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                                  FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
                 FROM fts_matches fm
@@ -378,7 +378,7 @@ async function main() {
                 WITH fts_matches AS (
                   SELECT rowid, rank FROM nodes_fts WHERE nodes_fts MATCH ? LIMIT ?
                 )
-                SELECT n.id, n.title, n.description, n.content, n.link, n.updated_at,
+                SELECT n.id, n.title, n.description, n.notes, n.link, n.updated_at,
                        COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                                  FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
                 FROM fts_matches fm
@@ -392,7 +392,7 @@ async function main() {
             nodes = rows.map(row => ({
               id: row.id,
               title: row.title,
-              content: row.content ?? null,
+              notes: row.notes ?? null,
               description: row.description ?? null,
               link: row.link ?? null,
               dimensions: JSON.parse(row.dimensions_json || '[]'),
@@ -410,7 +410,7 @@ async function main() {
         const words = trimmedQuery.split(/\s+/).filter(w => w.length > 0);
 
         let sql = `
-          SELECT n.id, n.title, n.description, n.content, n.link, n.updated_at,
+          SELECT n.id, n.title, n.description, n.notes, n.link, n.updated_at,
                  COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                            FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
           FROM nodes n
@@ -419,7 +419,7 @@ async function main() {
         const params = [];
 
         for (const word of words) {
-          sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.content LIKE ? COLLATE NOCASE)`;
+          sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
           params.push(`%${word}%`, `%${word}%`, `%${word}%`);
         }
 
@@ -439,7 +439,7 @@ async function main() {
         nodes = rows.map(row => ({
           id: row.id,
           title: row.title,
-          content: row.content ?? null,
+          notes: row.notes ?? null,
           description: row.description ?? null,
           link: row.link ?? null,
           dimensions: JSON.parse(row.dimensions_json || '[]'),
@@ -485,7 +485,7 @@ async function main() {
           nodes.push({
             id: node.id,
             title: node.title,
-            content: node.content ?? null,
+            notes: node.notes ?? null,
             description: node.description ?? null,
             link: node.link ?? null,
             chunk: chunkTruncated ? rawChunk.substring(0, CHUNK_LIMIT) : rawChunk,
@@ -520,7 +520,13 @@ async function main() {
         throw new Error('At least one field must be provided in updates.');
       }
 
-      const node = nodeService.updateNode(id, updates, { appendContent: true });
+      // Map external 'content' param to internal 'notes'
+      const mappedUpdates = { ...updates };
+      if (mappedUpdates.content !== undefined) {
+        mappedUpdates.notes = mappedUpdates.content;
+        delete mappedUpdates.content;
+      }
+      const node = nodeService.updateNode(id, mappedUpdates, { appendNotes: true });
 
       return {
         content: [{ type: 'text', text: `Updated node #${id}` }],

@@ -50,9 +50,9 @@ function initDatabase() {
         id INTEGER PRIMARY KEY,
         title TEXT,
         description TEXT,
-        content TEXT,
+        notes TEXT,
         link TEXT,
-        type TEXT,
+        event_date TEXT,
         created_at TEXT,
         updated_at TEXT,
         metadata TEXT,
@@ -71,7 +71,7 @@ function initDatabase() {
         source TEXT,
         created_at TEXT,
         context TEXT,
-        user_feedback INTEGER,
+        
         FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
         FOREIGN KEY (to_node_id) REFERENCES nodes(id) ON DELETE CASCADE
       );

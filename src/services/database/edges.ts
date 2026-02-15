@@ -430,9 +430,9 @@ export class EdgeService {
           ELSE n_from.title
         END as connected_node_title,
         CASE 
-          WHEN e.from_node_id = ? THEN n_to.content
-          ELSE n_from.content
-        END as connected_node_content,
+          WHEN e.from_node_id = ? THEN n_to.notes
+          ELSE n_from.notes
+        END as connected_node_notes,
         CASE 
           WHEN e.from_node_id = ? THEN n_to.link
           ELSE n_from.link
@@ -499,7 +499,7 @@ export class EdgeService {
       const connected_node: Node = {
         id: row.connected_node_id,
         title: row.connected_node_title,
-        content: row.connected_node_content,
+        notes: row.connected_node_notes,
         link: row.connected_node_link,
         dimensions: row.connected_node_dimensions,
         embedding: undefined, // Not needed for display
@@ -544,7 +544,7 @@ export class EdgeService {
       const connected_node: Node = {
         id: row.connected_node_id,
         title: row.connected_node_title,
-        content: row.connected_node_content,
+        notes: row.connected_node_notes,
         link: row.connected_node_link,
         dimensions: JSON.parse(row.connected_node_dimensions_json || '[]'),
         embedding: undefined, // Not needed for display

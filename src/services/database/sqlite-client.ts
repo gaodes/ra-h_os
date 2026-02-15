@@ -266,7 +266,7 @@ class SQLiteClient {
           }
         };
         ensureNodeCol('description', "ALTER TABLE nodes ADD COLUMN description TEXT;");
-        ensureNodeCol('type', "ALTER TABLE nodes ADD COLUMN type TEXT;");
+        // type column removed in final schema pass
       } catch (nodeErr) {
         console.warn('Failed to ensure nodes columns:', nodeErr);
       }
@@ -435,16 +435,8 @@ class SQLiteClient {
       }
       // Do not recreate memory_v; alias has been removed.
 
-      // 6) Chat memory state tracking for chat-triggered memories
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS chat_memory_state (
-          thread_id TEXT PRIMARY KEY,
-          helper_name TEXT,
-          last_processed_chat_id INTEGER DEFAULT 0,
-          last_processed_at TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_chat_memory_thread ON chat_memory_state(thread_id);
-      `);
+      // 6) Drop orphaned chat_memory_state table (removed in final schema pass)
+      this.db.exec(`DROP TABLE IF EXISTS chat_memory_state;`);
 
       // Agent delegation table for orchestrator/worker coordination
       try {
@@ -629,6 +621,81 @@ class SQLiteClient {
             console.warn('Failed to add description column to dimensions table:', e);
           }
         }
+      }
+
+      // 10) Final schema pass migrations (content→notes, event_date, icon, drop dead columns)
+      try {
+        const nodeCols2 = this.db.prepare('PRAGMA table_info(nodes)').all() as Array<{ name: string }>;
+        const nodeColNames = nodeCols2.map((c: any) => c.name);
+
+        // Rename content → notes
+        if (nodeColNames.includes('content') && !nodeColNames.includes('notes')) {
+          console.log('Renaming nodes.content → nodes.notes');
+          this.db.exec('ALTER TABLE nodes RENAME COLUMN content TO notes;');
+        }
+
+        // Add event_date with backfill from metadata
+        if (!nodeColNames.includes('event_date')) {
+          console.log('Adding nodes.event_date column');
+          this.db.exec('ALTER TABLE nodes ADD COLUMN event_date TEXT;');
+          this.db.exec(`
+            UPDATE nodes SET event_date = json_extract(metadata, '$.published_date')
+            WHERE metadata IS NOT NULL
+              AND json_extract(metadata, '$.published_date') IS NOT NULL
+              AND json_extract(metadata, '$.published_date') != '';
+          `);
+        }
+
+        // Add dimensions.icon
+        const dimCols2 = this.db.prepare('PRAGMA table_info(dimensions)').all() as Array<{ name: string }>;
+        if (!dimCols2.some((c: any) => c.name === 'icon')) {
+          console.log('Adding dimensions.icon column');
+          this.db.exec('ALTER TABLE dimensions ADD COLUMN icon TEXT;');
+        }
+
+        // Drop dead columns (SQLite 3.35+)
+        if (nodeColNames.includes('type')) {
+          console.log('Dropping nodes.type column');
+          try { this.db.exec('DROP INDEX IF EXISTS idx_nodes_type;'); } catch {}
+          try { this.db.exec('ALTER TABLE nodes DROP COLUMN type;'); } catch (e) {
+            console.warn('Could not drop nodes.type (SQLite < 3.35?):', e);
+          }
+        }
+        if (nodeColNames.includes('is_pinned')) {
+          console.log('Dropping nodes.is_pinned column');
+          try { this.db.exec('DROP INDEX IF EXISTS idx_nodes_pinned;'); } catch {}
+          try { this.db.exec('ALTER TABLE nodes DROP COLUMN is_pinned;'); } catch (e) {
+            console.warn('Could not drop nodes.is_pinned:', e);
+          }
+        }
+
+        // Drop edges.user_feedback
+        const edgeCols = this.db.prepare('PRAGMA table_info(edges)').all() as Array<{ name: string }>;
+        if (edgeCols.some((c: any) => c.name === 'user_feedback')) {
+          console.log('Dropping edges.user_feedback column');
+          try { this.db.exec('ALTER TABLE edges DROP COLUMN user_feedback;'); } catch (e) {
+            console.warn('Could not drop edges.user_feedback:', e);
+          }
+        }
+
+        // Rebuild FTS if it references 'content' instead of 'notes'
+        try {
+          const ftsCheck = this.db.prepare("SELECT sql FROM sqlite_master WHERE name='nodes_fts'").get() as any;
+          if (ftsCheck && ftsCheck.sql && ftsCheck.sql.includes('content')) {
+            console.log('Rebuilding nodes_fts to reference notes instead of content');
+            this.db.exec('DROP TABLE IF EXISTS nodes_fts;');
+            this.db.exec(`
+              CREATE VIRTUAL TABLE nodes_fts USING fts5(title, description, notes, content=nodes, content_rowid=id);
+              INSERT INTO nodes_fts(nodes_fts) VALUES('rebuild');
+            `);
+          }
+        } catch (ftsErr) {
+          console.warn('FTS rebuild skipped:', ftsErr);
+        }
+
+        console.log('Final schema pass migrations complete');
+      } catch (schemaErr) {
+        console.warn('Final schema pass migration error:', schemaErr);
       }
 
       console.log('Logging + memory schema ensured');

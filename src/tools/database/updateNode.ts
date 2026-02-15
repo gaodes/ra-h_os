@@ -7,7 +7,7 @@ export const updateNodeTool = tool({
     id: z.number().describe('The ID of the node to update'),
     updates: z.object({
       title: z.string().optional().describe('New title'),
-      content: z.string().optional().describe('New content/description/notes'),
+      notes: z.string().optional().describe('New content/description/notes'),
       link: z.string().optional().describe('New link'),
       dimensions: z.array(z.string()).optional().describe('New dimension tags - completely replaces existing dimensions'),
       chunk: z.string().optional().describe('New chunk content'),
@@ -25,28 +25,28 @@ export const updateNodeTool = tool({
       }
 
       // FORCE APPEND for content field - fetch existing and append new content
-      if (updates.content) {
+      if (updates.notes) {
         const fetchResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes/${id}`);
         if (fetchResponse.ok) {
           const { node } = await fetchResponse.json();
-          const existingContent = (node?.content || '').trim();
-          const newContent = updates.content.trim();
+          const existingNotes = (node?.notes || '').trim();
+          const newNotes = updates.notes.trim();
           
           // Skip if new content is identical to existing (model sent duplicate)
-          if (existingContent === newContent) {
-            console.log(`[updateNode] ERROR - new content identical to existing (${existingContent.length} chars). Model should NOT call updateNode again.`);
+          if (existingNotes === newNotes) {
+            console.log(`[updateNode] ERROR - new content identical to existing (${existingNotes.length} chars). Model should NOT call updateNode again.`);
             return {
               success: false,
-              error: 'Content already up to date - do not call updateNode again. Move to next step.',
+              error: 'Notes already up to date - do not call updateNode again. Move to next step.',
               data: null
             };
           }
           
           // Detect if adding a section that already exists (e.g., ## Integration Analysis)
-          const newSectionMatch = newContent.match(/^##\s+(.+)$/m);
-          if (newSectionMatch && existingContent) {
+          const newSectionMatch = newNotes.match(/^##\s+(.+)$/m);
+          if (newSectionMatch && existingNotes) {
             const sectionHeader = newSectionMatch[0]; // e.g., "## Integration Analysis"
-            if (existingContent.includes(sectionHeader)) {
+            if (existingNotes.includes(sectionHeader)) {
               console.log(`[updateNode] ERROR - Section "${sectionHeader}" already exists in node`);
               return {
                 success: false,
@@ -57,19 +57,19 @@ export const updateNodeTool = tool({
           }
           
           // Detect if model included existing content + new content
-          if (existingContent && newContent.startsWith(existingContent)) {
+          if (existingNotes && newNotes.startsWith(existingNotes)) {
             // Extract only the new part
-            const actualNewContent = newContent.substring(existingContent.length).trim();
-            console.log(`[updateNode] Model included existing content - extracting new part only (${actualNewContent.length} chars)`);
-            const separator = existingContent.endsWith('\n\n') ? '' : '\n\n';
-            updates.content = `${existingContent}${separator}${actualNewContent}`;
-          } else if (existingContent) {
+            const actualNewNotes = newNotes.substring(existingNotes.length).trim();
+            console.log(`[updateNode] Model included existing content - extracting new part only (${actualNewNotes.length} chars)`);
+            const separator = existingNotes.endsWith('\n\n') ? '' : '\n\n';
+            updates.notes = `${existingNotes}${separator}${actualNewNotes}`;
+          } else if (existingNotes) {
             // Normal append
-            const separator = existingContent.endsWith('\n\n') ? '' : '\n\n';
-            updates.content = `${existingContent}${separator}${newContent}`;
-            console.log(`[updateNode] Appended content: ${existingContent.length} + ${newContent.length} = ${updates.content.length} chars`);
+            const separator = existingNotes.endsWith('\n\n') ? '' : '\n\n';
+            updates.notes = `${existingNotes}${separator}${newNotes}`;
+            console.log(`[updateNode] Appended notes: ${existingNotes.length} + ${newNotes.length} = ${updates.notes.length} chars`);
           } else {
-            console.log(`[updateNode] No existing content, using new content as-is (${newContent.length} chars)`);
+            console.log(`[updateNode] No existing content, using new content as-is (${newNotes.length} chars)`);
           }
         }
       }
@@ -79,7 +79,7 @@ export const updateNodeTool = tool({
       // Call the nodes API endpoint
       const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Notes-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
 

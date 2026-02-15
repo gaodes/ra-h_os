@@ -118,9 +118,9 @@ CREATE TABLE nodes (
   id INTEGER PRIMARY KEY,
   title TEXT,
   description TEXT,
-  content TEXT,
+  notes TEXT,
   link TEXT,
-  type TEXT,
+  event_date TEXT,
   created_at TEXT,
   updated_at TEXT,
   metadata TEXT,
@@ -159,7 +159,6 @@ CREATE TABLE edges (
   source TEXT,
   created_at TEXT,
   context TEXT,
-  user_feedback INTEGER,
   FOREIGN KEY (from_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
   FOREIGN KEY (to_node_id) REFERENCES nodes(id) ON DELETE CASCADE
 );
@@ -252,17 +251,8 @@ if has_table chats && ! has_col chats delegation_id; then
   "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE chats ADD COLUMN delegation_id INTEGER;"
 fi
 
-if ! has_table chat_memory_state; then
-  "$SQLITE_BIN" "$DB_PATH" <<'SQL'
-CREATE TABLE chat_memory_state (
-  thread_id TEXT PRIMARY KEY,
-  helper_name TEXT,
-  last_processed_chat_id INTEGER DEFAULT 0,
-  last_processed_at TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_chat_memory_thread ON chat_memory_state(thread_id);
-SQL
-fi
+# chat_memory_state removed in final schema pass
+"$SQLITE_BIN" "$DB_PATH" "DROP TABLE IF EXISTS chat_memory_state;"
 
 echo "Dropping legacy agent_delegations table if present..."
 "$SQLITE_BIN" "$DB_PATH" "DROP TABLE IF EXISTS agent_delegations;"
@@ -283,10 +273,6 @@ fi
 echo "Checking/adding missing columns..."
 
 if has_table nodes; then
-  if ! has_col nodes type; then
-    echo "Adding nodes.type"
-    "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN type TEXT;"
-  fi
   if ! has_col nodes description; then
     echo "Adding nodes.description"
     "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN description TEXT;"
@@ -299,10 +285,7 @@ if has_table nodes; then
     echo "Adding nodes.chunk"
     "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN chunk TEXT;"
   fi
-  if ! has_col nodes is_pinned; then
-    echo "Adding nodes.is_pinned"
-    "$SQLITE_BIN" "$DB_PATH" "ALTER TABLE nodes ADD COLUMN is_pinned INTEGER DEFAULT 0;"
-  fi
+  # is_pinned removed in final schema pass
 fi
 
 if has_table chunks; then
@@ -321,6 +304,8 @@ if ! has_table dimensions; then
   "$SQLITE_BIN" "$DB_PATH" <<'SQL'
 CREATE TABLE dimensions (
   name TEXT PRIMARY KEY,
+  description TEXT,
+  icon TEXT,
   is_priority INTEGER DEFAULT 0,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -345,9 +330,9 @@ CREATE VIEW nodes_v AS
 SELECT n.id,
        n.title,
        n.description,
-       n.content,
+       n.notes,
        n.link,
-       n.type,
+       n.event_date,
        n.metadata,
        n.created_at,
        n.updated_at,

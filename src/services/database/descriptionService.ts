@@ -4,7 +4,7 @@ import { hasValidOpenAiKey } from '../storage/apiKeys';
 
 export interface DescriptionInput {
   title: string;
-  content?: string;
+  notes?: string;
   link?: string;
   metadata?: {
     source?: string;
@@ -12,7 +12,6 @@ export interface DescriptionInput {
     author?: string;
     site_name?: string;
   };
-  type?: string;
   dimensions?: string[];
 }
 
@@ -24,17 +23,13 @@ export { hasValidOpenAiKey } from '../storage/apiKeys';
  * Used when no API key is available or for simple inputs.
  */
 export function generateFallbackDescription(input: DescriptionInput): string {
-  const { title, type, metadata, dimensions } = input;
+  const { title, metadata, dimensions } = input;
 
   // Build a contextual fallback
   const parts: string[] = [];
 
   if (metadata?.author || metadata?.channel_name) {
     parts.push(`By ${metadata.author || metadata.channel_name}`);
-  }
-
-  if (type) {
-    parts.push(type.charAt(0).toUpperCase() + type.slice(1));
   }
 
   if (dimensions?.length) {
@@ -63,7 +58,7 @@ export async function generateDescription(input: DescriptionInput): Promise<stri
   }
 
   // Fast path: skip AI for very short inputs (likely just notes)
-  if (!input.content && !input.link && input.title.length < 30) {
+  if (!input.notes && !input.link && input.title.length < 30) {
     console.log(`[DescriptionService] Short input, using fallback for: "${input.title}"`);
     return generateFallbackDescription(input);
   }
@@ -135,8 +130,8 @@ function buildDescriptionPrompt(input: DescriptionInput): string {
   if (publisherHint) lines.push(`Publisher hint: ${publisherHint}`);
   lines.push(`Likely user-authored: ${likelyUserAuthored ? 'yes' : 'no'}`);
 
-  const contentPreview = input.content?.slice(0, 800) || '';
-  if (contentPreview) lines.push(`Content: ${contentPreview}${input.content && input.content.length > 800 ? '...' : ''}`);
+  const contentPreview = input.notes?.slice(0, 800) || '';
+  if (contentPreview) lines.push(`Notes: ${contentPreview}${input.notes && input.notes.length > 800 ? '...' : ''}`);
 
   return `Your job is to answer: "what is this?" in one short line. Max 280 characters.
 

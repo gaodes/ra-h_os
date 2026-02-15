@@ -55,7 +55,7 @@ export class DimensionService {
    */
   static async assignDimensions(nodeData: {
     title: string;
-    content?: string;
+    notes?: string;
     link?: string;
     description?: string;
   }): Promise<{ locked: string[]; keywords: string[] }> {
@@ -156,19 +156,19 @@ export class DimensionService {
    * Build AI prompt for dimension assignment (locked dimensions only)
    */
   private static buildAssignmentPrompt(
-    nodeData: { title: string; content?: string; link?: string; description?: string },
+    nodeData: { title: string; notes?: string; link?: string; description?: string },
     lockedDimensions: LockedDimension[]
   ): string {
     // Use description as primary context, content as fallback
     let nodeContextSection: string;
     if (nodeData.description) {
-      const contentPreview = nodeData.content?.slice(0, 500) || '';
+      const contentPreview = nodeData.notes?.slice(0, 500) || '';
       nodeContextSection = `DESCRIPTION: ${nodeData.description}
 
-CONTENT PREVIEW: ${contentPreview}${nodeData.content && nodeData.content.length > 500 ? '...' : ''}`;
+NOTES PREVIEW: ${contentPreview}${nodeData.notes && nodeData.notes.length > 500 ? '...' : ''}`;
     } else {
-      const contentPreview = nodeData.content?.slice(0, 2000) || '';
-      nodeContextSection = `CONTENT: ${contentPreview}${nodeData.content && nodeData.content.length > 2000 ? '...' : ''}`;
+      const contentPreview = nodeData.notes?.slice(0, 2000) || '';
+      nodeContextSection = `NOTES: ${contentPreview}${nodeData.notes && nodeData.notes.length > 2000 ? '...' : ''}`;
     }
 
     // Include ALL locked dimensions, using fallback text for those without descriptions

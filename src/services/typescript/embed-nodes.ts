@@ -16,7 +16,7 @@ import {
 interface NodeRecord {
   id: number;
   title: string;
-  content: string | null;
+  notes: string | null;
   description: string | null;
   dimensions_json: string;
   embedding?: Buffer | null;
@@ -58,7 +58,7 @@ export class NodeEmbedder {
     const prompt = `Analyze this content and provide 2-3 key insights or themes in a concise paragraph (max 100 words):
 
 Title: ${node.title}
-Content: ${node.content || 'No content'}
+Content: ${node.notes || 'No content'}
 Dimensions: ${dimensionsText}
 
 Focus on the main concepts, key relationships, and practical implications.`;
@@ -106,13 +106,13 @@ Focus on the main concepts, key relationships, and practical implications.`;
     // Create base embedding text
     let embeddingText = formatEmbeddingText(
       node.title,
-      node.content || '',
+      node.notes || '',
       dimensions,
       node.description
     );
 
     // Add AI analysis if content exists
-    if (node.content && node.content.trim().length > 0) {
+    if (node.notes && node.notes.trim().length > 0) {
       const analysis = await this.analyzeNodeWithAI(node);
       if (analysis) {
         embeddingText += `\n\nAI Analysis: ${analysis}`;

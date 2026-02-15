@@ -6,9 +6,9 @@ export const getNodesByIdTool = tool({
   description: 'Load full node records by IDs',
   inputSchema: z.object({
     nodeIds: z.array(z.number().int().positive()).min(1).max(10).describe('List of node IDs to load'),
-    includeContentPreview: z.boolean().default(true).describe('Whether to return a trimmed content preview for each node'),
+    includeNotesPreview: z.boolean().default(true).describe('Whether to return a trimmed content preview for each node'),
   }),
-  execute: async ({ nodeIds, includeContentPreview }) => {
+  execute: async ({ nodeIds, includeNotesPreview }) => {
     const uniqueIds = Array.from(new Set(nodeIds.filter(id => Number.isFinite(id) && id > 0)));
     if (uniqueIds.length === 0) {
       return {
@@ -23,8 +23,8 @@ export const getNodesByIdTool = tool({
         try {
           const node = await nodeService.getNodeById(id);
           if (!node) return null;
-          const preview = includeContentPreview
-            ? (node.content || node.description || '')
+          const preview = includeNotesPreview
+            ? (node.notes || node.description || '')
                 .split(/\s+/)
                 .slice(0, 80)
                 .join(' ')
@@ -38,7 +38,7 @@ export const getNodesByIdTool = tool({
             dimensions: node.dimensions || [],
             chunk_status: node.chunk_status || 'unknown',
             updated_at: node.updated_at,
-            content_preview: preview || null,
+            notes_preview: preview || null,
             metadata: node.metadata ?? null,
           };
         } catch (error) {

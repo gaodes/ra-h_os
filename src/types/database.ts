@@ -3,16 +3,16 @@ export interface Node {
   id: number;
   title: string;
   description?: string;
-  content?: string;           // Consolidated content from description + abstract + notes
+  notes?: string;           // Consolidated content from description + abstract + notes
   link?: string;
-  type?: string;
+  event_date?: string;
   dimensions: string[];       // Flexible dimensions replacing type + stage + segment + tags
   embedding?: Buffer;         // Node-level embedding (BLOB data)
   chunk?: string;
   metadata?: any;            // Flexible metadata storage from extras + chunk_status + sub_type
   created_at: string;
   updated_at: string;
-  is_pinned?: number;        // Legacy pin flag (read-only, slated for removal)
+        // Legacy pin flag (read-only, slated for removal)
   edge_count?: number;       // Derived count of edges, included in some queries
 
   // Optional embedding fields (restored from migration)

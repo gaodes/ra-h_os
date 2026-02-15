@@ -19,6 +19,7 @@ export async function GET() {
       SELECT
         d.name AS dimension,
         d.description,
+        d.icon,
         d.is_priority AS isPriority,
         COALESCE(dc.count, 0) AS count
       FROM dimensions d
@@ -31,6 +32,7 @@ export async function GET() {
       data: result.rows.map((row: any) => ({
         dimension: row.dimension,
         description: row.description,
+        icon: row.icon || null,
         isPriority: Boolean(row.isPriority),
         count: Number(row.count)
       }))
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const rawName = typeof body?.name === 'string' ? body.name.trim() : '';
     const description = typeof body?.description === 'string' ? body.description.trim() : null;
+    const icon = typeof body?.icon === 'string' ? body.icon.trim() : null;
     const isPriority = typeof body?.isPriority === 'boolean' ? body.isPriority : false;
     
     if (!rawName) {
@@ -67,14 +70,15 @@ export async function POST(request: NextRequest) {
 
     const sqlite = getSQLiteClient();
     const result = sqlite.query(`
-      INSERT INTO dimensions(name, description, is_priority, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(name) DO UPDATE SET 
+      INSERT INTO dimensions(name, description, icon, is_priority, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(name) DO UPDATE SET
         description = COALESCE(?, description),
+        icon = COALESCE(?, icon),
         is_priority = COALESCE(?, is_priority),
         updated_at = CURRENT_TIMESTAMP
-      RETURNING name, description, is_priority
-    `, [rawName, description, isPriority ? 1 : 0, description, isPriority ? 1 : 0]);
+      RETURNING name, description, icon, is_priority
+    `, [rawName, description, icon, isPriority ? 1 : 0, description, icon, isPriority ? 1 : 0]);
 
     if (result.rows.length === 0) {
       throw new Error('Failed to create dimension');

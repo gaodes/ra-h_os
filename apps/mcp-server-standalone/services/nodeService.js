@@ -9,7 +9,7 @@ function getNodes(filters = {}) {
   const { dimensions, search, limit = 100, offset = 0 } = filters;
 
   let sql = `
-    SELECT n.id, n.title, n.description, n.content, n.link, n.type, n.metadata, n.chunk,
+    SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk,
            n.created_at, n.updated_at,
            COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                      FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -30,7 +30,7 @@ function getNodes(filters = {}) {
 
   // Text search
   if (search) {
-    sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.content LIKE ? COLLATE NOCASE)`;
+    sql += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
 
@@ -70,7 +70,7 @@ function getNodes(filters = {}) {
  */
 function getNodeById(id) {
   const sql = `
-    SELECT n.id, n.title, n.description, n.content, n.link, n.type, n.metadata, n.chunk,
+    SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk,
            n.created_at, n.updated_at,
            COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                      FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json
@@ -97,7 +97,7 @@ function createNode(nodeData) {
   const {
     title,
     description,
-    content,
+    notes,
     link,
     type,
     dimensions = [],
@@ -110,7 +110,7 @@ function createNode(nodeData) {
 
   const nodeId = transaction(() => {
     const stmt = db.prepare(`
-      INSERT INTO nodes (title, description, content, link, type, metadata, chunk, created_at, updated_at)
+      INSERT INTO nodes (title, description, notes, link, type, metadata, chunk, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
@@ -149,8 +149,8 @@ function createNode(nodeData) {
  * Note: content is APPENDED by default (MCP tool behavior), not replaced.
  */
 function updateNode(id, updates, options = {}) {
-  const { appendContent = true } = options;
-  const { title, description, content, link, type, dimensions, chunk, metadata } = updates;
+  const { appendNotes = true } = options;
+  const { title, description, notes, link, type, dimensions, chunk, metadata } = updates;
   const now = new Date().toISOString();
   const db = getDb();
 
@@ -173,10 +173,10 @@ function updateNode(id, updates, options = {}) {
       params.push(description);
     }
     if (content !== undefined) {
-      if (appendContent && existing.content) {
+      if (appendNotes && existing.notes) {
         // Append to existing content
         setFields.push('content = ?');
-        params.push(existing.content + '\n\n' + content);
+        params.push(existing.notes + '\n\n' + content);
       } else {
         setFields.push('content = ?');
         params.push(content);

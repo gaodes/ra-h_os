@@ -76,13 +76,13 @@ export const websiteExtractTool = tool({
         };
       }
 
-      let result: { success: boolean; content?: string; chunk?: string; metadata?: any; error?: string };
+      let result: { success: boolean; notes?: string; chunk?: string; metadata?: any; error?: string };
       
       try {
         const extractionResult = await extractWebsite(url);
         result = {
           success: true,
-          content: extractionResult.content,
+          notes: extractionResult.content,
           chunk: extractionResult.chunk,
           metadata: {
             title: extractionResult.metadata.title,
@@ -101,7 +101,7 @@ export const websiteExtractTool = tool({
         };
       }
 
-      if (!result.success || (!result.content && !result.chunk)) {
+      if (!result.success || (!result.notes && !result.chunk)) {
         return {
           success: false,
           error: result.error || 'Failed to extract website content',
@@ -114,7 +114,7 @@ export const websiteExtractTool = tool({
       // Step 2: AI Analysis for enhanced metadata
       const aiAnalysis = await analyzeContentWithAI(
         result.metadata?.title || `Website: ${new URL(url).hostname}`, 
-        result.content?.substring(0, 2000) || 'Website content', 
+        result.notes?.substring(0, 2000) || 'Website content', 
         'website'
       );
 
@@ -134,16 +134,16 @@ export const websiteExtractTool = tool({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: nodeTitle,
-          content: enhancedDescription,
+          notes: enhancedDescription,
           link: url,
           dimensions: trimmedDimensions,
-          chunk: result.chunk || result.content,
+          chunk: result.chunk || result.notes,
           metadata: {
             source: 'website',
             hostname: new URL(url).hostname,
             author: result.metadata?.author,
             published_date: result.metadata?.published_date || result.metadata?.date,
-            content_length: (result.chunk || result.content)?.length,
+            content_length: (result.chunk || result.notes)?.length,
             extraction_method: result.metadata?.extraction_method || 'python_beautifulsoup',
             ai_analysis: aiAnalysis?.reasoning,
             enhanced_description: enhancedDescription,
@@ -177,7 +177,7 @@ export const websiteExtractTool = tool({
         data: {
           nodeId: createResult.data?.id,
           title: nodeTitle,
-          contentLength: (result.chunk || result.content || '').length,
+          contentLength: (result.chunk || result.notes || '').length,
           url: url,
           dimensions: actualDimensions
         }

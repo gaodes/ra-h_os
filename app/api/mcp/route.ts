@@ -134,7 +134,7 @@ function createRAHServer(): McpServer {
               id: node.id,
               title: node.title,
               description: node.description ?? null,
-              content: node.content ?? null,
+              notes: node.notes ?? null,
               link: node.link ?? null,
               dimensions: node.dimensions || [],
               metadata: node.metadata || {},

@@ -14,13 +14,12 @@ immutable: true
 | id | INTEGER | Primary key, auto-increment |
 | title | TEXT | Required |
 | description | TEXT | AI-generated grounding context (~1 sentence) |
-| content | TEXT | User's notes/thoughts (not source content) |
+| notes | TEXT | User's notes/thoughts (not source content) |
 | chunk | TEXT | Full verbatim source content |
 | chunk_status | TEXT | 'pending', 'chunked', 'failed' |
 | link | TEXT | External URL (only for nodes representing external content) |
-| type | TEXT | Nullable (reserved for future use) |
+| event_date | TEXT | When the content happened (ISO date) — distinct from created_at |
 | metadata | TEXT | JSON blob (map_position, transcript_length, etc.) |
-| is_pinned | INTEGER | Legacy — use hub node queries instead |
 | created_at | TEXT | ISO timestamp |
 | updated_at | TEXT | ISO timestamp |
 
@@ -40,6 +39,7 @@ immutable: true
 |--------|------|-------|
 | name | TEXT | Primary key |
 | description | TEXT | Purpose description |
+| icon | TEXT | Emoji or icon identifier for UI display |
 | is_priority | INTEGER | 1 = priority dimension (auto-assigns to new nodes) |
 | updated_at | TEXT | ISO timestamp |
 
@@ -60,9 +60,17 @@ immutable: true
 | embedding_type | TEXT | Embedding model used |
 | metadata | TEXT | JSON blob |
 
+### voice_usage (daily tracking)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | INTEGER | Primary key |
+| date | TEXT | ISO date (UNIQUE) |
+| minutes_used | REAL | Minutes consumed |
+| updated_at | TEXT | ISO timestamp |
+
 ### FTS Tables
 - `chunks_fts` — full-text search on chunk text
-- `nodes_fts` — full-text search on node title + content
+- `nodes_fts` — full-text search on node title + notes
 
 ## Common Query Patterns
 

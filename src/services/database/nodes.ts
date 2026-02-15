@@ -15,7 +15,7 @@ export class NodeService {
     
     // Use nodes_v view for array-like dimensions behavior (exclude embedding BLOB for performance)
     let query = `
-      SELECT n.id, n.title, n.description, n.content, n.link, n.type, n.metadata, n.chunk, 
+      SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk, 
              n.chunk_status, n.embedding_updated_at, n.embedding_text,
              n.created_at, n.updated_at,
              COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension) 
@@ -38,7 +38,7 @@ export class NodeService {
 
     // Text search in title, description, and content (SQLite LIKE with COLLATE NOCASE)
     if (search) {
-      query += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.content LIKE ? COLLATE NOCASE)`;
+      query += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -50,7 +50,7 @@ export class NodeService {
         CASE WHEN LOWER(n.title) LIKE LOWER(?) THEN 2 ELSE 6 END,
         CASE WHEN n.title LIKE ? COLLATE NOCASE THEN 3 ELSE 6 END,
         CASE WHEN n.description LIKE ? COLLATE NOCASE THEN 4 ELSE 6 END,
-        CASE WHEN n.content LIKE ? COLLATE NOCASE THEN 5 ELSE 6 END,
+        CASE WHEN n.notes LIKE ? COLLATE NOCASE THEN 5 ELSE 6 END,
         n.updated_at DESC`;
       params.push(
         search,           // Exact match (case-insensitive)
@@ -95,7 +95,7 @@ export class NodeService {
   private async getNodeByIdSQLite(id: number): Promise<Node | null> {
     const sqlite = getSQLiteClient();
     const query = `
-      SELECT n.id, n.title, n.description, n.content, n.link, n.type, n.metadata, n.chunk,
+      SELECT n.id, n.title, n.description, n.notes, n.link, n.event_date, n.metadata, n.chunk,
              n.chunk_status, n.embedding_updated_at, n.embedding_text,
              n.created_at, n.updated_at,
              COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension) 
@@ -125,9 +125,9 @@ export class NodeService {
     const {
       title,
       description,
-      content,
+      notes,
       link,
-      type,
+      event_date,
       dimensions = [],
       chunk,
       chunk_status,
@@ -139,14 +139,14 @@ export class NodeService {
     const nodeId = sqlite.transaction(() => {
       // Insert node using prepare/run for lastInsertRowid access
       const nodeResult = sqlite.prepare(`
-        INSERT INTO nodes (title, description, content, link, type, metadata, chunk, chunk_status, created_at, updated_at)
+        INSERT INTO nodes (title, description, notes, link, event_date, metadata, chunk, chunk_status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         title,
         description ?? null,
-        content ?? null,
+        notes ?? null,
         link ?? null,
-        type ?? null,
+        event_date ?? null,
         JSON.stringify(metadata),
         chunk ?? null,
         chunk_status ?? null,
@@ -192,7 +192,7 @@ export class NodeService {
   // PostgreSQL path removed in SQLite-only consolidation
 
   private async updateNodeSQLite(id: number, updates: Partial<Node>): Promise<Node> {
-    const { title, description, content, link, type, dimensions, chunk, metadata } = updates;
+    const { title, description, notes, link, event_date, dimensions, chunk, metadata } = updates;
     const now = new Date().toISOString();
     const sqlite = getSQLiteClient();
 
@@ -211,9 +211,9 @@ export class NodeService {
       
       if (title !== undefined) { setFields.push('title = ?'); params.push(title); }
       if (description !== undefined) { setFields.push('description = ?'); params.push(description); }
-      if (content !== undefined) { setFields.push('content = ?'); params.push(content); }
+      if (notes !== undefined) { setFields.push('notes = ?'); params.push(notes); }
       if (link !== undefined) { setFields.push('link = ?'); params.push(link); }
-      if (type !== undefined) { setFields.push('type = ?'); params.push(type); }
+      if (event_date !== undefined) { setFields.push('event_date = ?'); params.push(event_date); }
       if (chunk !== undefined) { setFields.push('chunk = ?'); params.push(chunk); }
       if (Object.prototype.hasOwnProperty.call(updates, 'chunk_status')) {
         setFields.push('chunk_status = ?');

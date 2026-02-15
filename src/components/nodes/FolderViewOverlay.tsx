@@ -1240,7 +1240,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               </span>
             )}
           </div>
-          {node.content && (
+          {node.notes && (
             <div style={{
               fontSize: '12px',
               color: '#94a3b8',
@@ -1251,7 +1251,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               WebkitBoxOrient: 'vertical',
               fontWeight: 400
             }}>
-              {getContentPreview(node.content)}
+              {getContentPreview(node.notes)}
             </div>
           )}
           {node.dimensions && node.dimensions.length > 0 && (
@@ -1376,7 +1376,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
               {node.title || 'Untitled'}
             </div>
 
-            {node.content && (
+            {node.notes && (
               <div style={{
                 fontSize: '12px',
                 color: '#94a3b8',
@@ -1387,7 +1387,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden'
               }}>
-                {getContentPreview(node.content)}
+                {getContentPreview(node.notes)}
               </div>
             )}
 
@@ -1846,7 +1846,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                     {node.title || 'Untitled'}
                   </div>
 
-                  {node.content && (
+                  {node.notes && (
                     <div style={{
                       fontSize: '12px',
                       color: '#94a3b8',
@@ -1857,7 +1857,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden'
                     }}>
-                      {getContentPreview(node.content)}
+                      {getContentPreview(node.notes)}
                     </div>
                   )}
 
@@ -2862,7 +2862,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         {node.title || 'Untitled'}
                       </div>
                     </div>
-                    {node.content && (
+                    {node.notes && (
                       <div style={{
                         fontSize: '11px',
                         color: '#666',
@@ -2872,7 +2872,7 @@ export default function FolderViewOverlay({ onClose, onNodeOpen, refreshToken, o
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical'
                       }}>
-                        {getContentPreview(node.content)}
+                        {getContentPreview(node.notes)}
                       </div>
                     )}
                     {node.dimensions && node.dimensions.length > 1 && (

@@ -68,16 +68,11 @@ export async function PUT(
       }, { status: 404 });
     }
 
-    if (body && Object.prototype.hasOwnProperty.call(body, 'is_pinned')) {
-      console.warn(`[nodes/${nodeId}] Ignoring legacy is_pinned payload`);
-      delete body.is_pinned;
-    }
-
     const updates: Record<string, unknown> = { ...body };
     let shouldQueueEmbed = false;
 
     const incomingChunk = typeof body.chunk === 'string' ? body.chunk : undefined;
-    const incomingContent = typeof body.content === 'string' ? body.content : undefined;
+    const incomingNotes = typeof body.notes === 'string' ? body.notes : undefined;
     const existingChunk = existingNode.chunk ?? '';
 
     if (incomingChunk !== undefined) {
@@ -92,8 +87,8 @@ export async function PUT(
       } else {
         delete updates.chunk_status;
       }
-    } else if (!existingChunk.trim() && hasSufficientContent(incomingContent)) {
-      updates.chunk = incomingContent;
+    } else if (!existingChunk.trim() && hasSufficientContent(incomingNotes)) {
+      updates.chunk = incomingNotes;
       updates.chunk_status = 'not_chunked';
       shouldQueueEmbed = true;
     }

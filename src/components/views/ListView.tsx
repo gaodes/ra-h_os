@@ -105,7 +105,7 @@ export default function ListView({ nodes, onNodeClick }: ListViewProps) {
               </div>
 
               {/* Description or Content Preview */}
-              {(node.description || node.content) && (
+              {(node.description || node.notes) && (
                 <div style={{
                   fontSize: '12px',
                   color: '#666',
@@ -116,7 +116,7 @@ export default function ListView({ nodes, onNodeClick }: ListViewProps) {
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden'
                 }}>
-                  {node.description || truncateContent(node.content)}
+                  {node.description || truncateContent(node.notes)}
                 </div>
               )}
 

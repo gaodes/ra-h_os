@@ -288,7 +288,7 @@ server.registerTool(
 
     const payload = {
       title: title.trim(),
-      content: content?.trim() || undefined,
+      notes: content?.trim() || undefined,
       link: link?.trim() || undefined,
       description: description?.trim() || undefined,
       dimensions: normalizedDimensions,
@@ -351,7 +351,7 @@ server.registerTool(
         nodes: nodes.map((node) => ({
           id: node.id,
           title: node.title,
-          content: node.content ?? null,
+          notes: node.notes ?? null,
           description: node.description ?? null,
           link: node.link ?? null,
           dimensions: node.dimensions || [],
@@ -647,7 +647,7 @@ server.registerTool(
         results: results.map(r => ({
           nodeId: r.node_id || r.nodeId || r.id,
           title: r.title || 'Untitled',
-          chunkPreview: (r.chunk || r.content || '').slice(0, 200),
+          chunkPreview: (r.chunk || r.notes || '').slice(0, 200),
           similarity: r.similarity || r.score || 0
         }))
       }

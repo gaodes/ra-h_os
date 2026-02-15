@@ -382,7 +382,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
     try {
       const updateData: Record<string, string> = {};
 
-      if (editingField === 'content') {
+      if (editingField === 'notes') {
         updateData.content = editingValue;
       } else {
         updateData[editingField] = editingValue;
@@ -406,7 +406,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       }
 
       // Safety net: ensure edges exist for any tokens present in saved content
-      if (editingField === 'content' && typeof editingValue === 'string') {
+      if (editingField === 'notes' && typeof editingValue === 'string') {
         try {
           const tokens = parseNodeMarkers(editingValue);
           const uniqueTargets = Array.from(new Set(tokens.map(t => t.id))).filter(id => id !== nodeId);
@@ -448,7 +448,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const response = await fetch(`/api/nodes/${nodeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: contentValue }),
+        body: JSON.stringify({ notes: contentValue }),
       });
       if (!response.ok) throw new Error('Failed to save');
       const result = await response.json();
@@ -568,7 +568,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       const response = await fetch(`/api/nodes/${activeTab}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: notesEditValue }),
+        body: JSON.stringify({ notes: notesEditValue }),
       });
       if (!response.ok) throw new Error('Failed to save');
       const result = await response.json();
@@ -614,7 +614,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   // Start editing notes
   const startNotesEdit = () => {
     if (!activeTab || !nodesData[activeTab]) return;
-    setNotesEditValue(nodesData[activeTab].content || '');
+    setNotesEditValue(nodesData[activeTab].notes || '');
     setNotesEditMode(true);
   };
 
@@ -1023,15 +1023,15 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
 
   const embedContent = async (nodeId: number) => {
     const node = nodesData[nodeId];
-    const hasContent = node?.content?.trim();
+    const hasNotes = node?.notes?.trim();
     const hasChunk = node?.chunk?.trim();
     // If chunk is empty but content exists, auto-populate chunk from content
-    if (!hasChunk && hasContent) {
+    if (!hasChunk && hasNotes) {
       try {
         const response = await fetch(`/api/nodes/${nodeId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chunk: hasContent })
+          body: JSON.stringify({ chunk: hasNotes })
         });
         
         if (response.ok) {
@@ -1046,7 +1046,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
       }
     }
     // If neither content nor chunk exist, require content
-    if (!hasContent && !hasChunk) {
+    if (!hasNotes && !hasChunk) {
       startEdit('content', '');
       return;
     }
@@ -2722,7 +2722,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                         </div>
                       )}
                     </div>
-                  ) : nodesData[activeTab]?.content ? (
+                  ) : nodesData[activeTab]?.notes ? (
                     <div
                       style={{
                         color: '#e5e5e5',
@@ -2734,7 +2734,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                       }}
                     >
                       <MarkdownWithNodeTokens
-                        content={nodesData[activeTab].content}
+                        content={nodesData[activeTab].notes || ''}
                         onNodeClick={onNodeClick || onTabSelect}
                       />
                     </div>
