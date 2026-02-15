@@ -8,43 +8,51 @@ import { formatNodeForChat } from '../infrastructure/nodeFormatter';
 // AI-powered content analysis
 async function analyzeContentWithAI(title: string, description: string, contentType: string) {
   try {
-    const prompt = `Analyze this ${contentType} content and provide classification:
+    const prompt = `Analyze this ${contentType} content and provide classification.
 
 Title: "${title}"
 Description: "${description}"
 
+CRITICAL — nodeDescription rules (max 280 chars):
+1. Say WHAT this literally is: "Paper by…", "Research from…", "Preprint introducing…"
+2. Name the authors if known from the metadata.
+3. State the actual finding, method, or contribution — not "a study on X" but what they actually found or built.
+4. End with why it matters — one concrete phrase about impact or implication.
+5. ABSOLUTELY FORBIDDEN: "discusses", "explores", "examines", "talks about", "delves into", "emphasizing the need for". State things directly.
+
+Examples:
+- Title: "Attention Is All You Need" / Authors: Vaswani et al.
+  GOOD: "Vaswani et al. introduce the Transformer architecture — replaces recurrence with self-attention for sequence modeling. Foundation of every modern LLM."
+  BAD: "This paper discusses a new architecture called the Transformer and explores its applications."
+
+- Title: "Scaling Laws for Neural Language Models" / Authors: Kaplan et al.
+  GOOD: "Kaplan et al. show that LLM performance scales as a power law with compute, data, and parameters — and compute matters most. The paper that launched the scaling era."
+  BAD: "A study examining how neural language models scale with different factors."
+
 Respond with ONLY valid JSON (no markdown, no code blocks):
 {
-  "enhancedDescription": "A comprehensive summary of what this content is about (can be several paragraphs, up to ~1500 characters)",
-  "tags": ["relevant", "semantic", "tags", "like", "ai", "economics", "research"],
-  "reasoning": "Brief explanation of why you chose these categories"
-}
-
-Guidelines:
-- enhancedDescription should be thorough - cover key points, arguments, and takeaways
-- Aim for 3-6 paragraphs or 800-1500 characters - don't artificially truncate
-- Include 3-8 relevant semantic tags (not just generic ones)
-- For academic papers, include tags like: research, academic, paper, plus domain-specific tags
-- For AI/ML papers, include: ai, machine-learning, artificial-intelligence, deep-learning
-- For economics papers, include: economics, finance, markets, policy
-- Be specific and insightful
-- Return ONLY the JSON object, no other text`;
+  "enhancedDescription": "A comprehensive summary (3-6 paragraphs, 800-1500 chars). Cover key points, arguments, takeaways.",
+  "nodeDescription": "<your 280-char description following the rules above>",
+  "tags": ["relevant", "semantic", "tags"],
+  "reasoning": "Brief explanation of classification choices"
+}`;
 
     const response = await generateText({
-      model: openai('gpt-5-mini'),
+      model: openai('gpt-4o-mini'),
       prompt,
       maxOutputTokens: 800
     });
 
     let content = response.text || '{}';
-    
+
     // Clean up the response - remove markdown code blocks if present
     content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    
+
     const result = JSON.parse(content);
 
     return {
       enhancedDescription: result.enhancedDescription || description,
+      nodeDescription: typeof result.nodeDescription === 'string' ? result.nodeDescription.slice(0, 280) : undefined,
       tags: Array.isArray(result.tags) ? result.tags : [],
       reasoning: result.reasoning || 'AI analysis completed'
     };
@@ -53,6 +61,7 @@ Guidelines:
     console.warn('Paper analysis fallback (using default description):', message);
     return {
       enhancedDescription: description,
+      nodeDescription: undefined,
       tags: [],
       reasoning: 'Fallback description used'
     };
@@ -143,6 +152,7 @@ export const paperExtractTool = tool({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: nodeTitle,
+          description: aiAnalysis?.nodeDescription,
           notes: enhancedDescription,
           link: url,
           dimensions: trimmedDimensions,

@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { Filter, ChevronDown, X, ArrowUpDown } from 'lucide-react';
+import { Filter, ChevronDown, X, ArrowUpDown, GripVertical } from 'lucide-react';
 import type { Node } from '@/types/database';
 import { getNodeIcon } from '@/utils/nodeIcons';
 import { useDimensionIcons } from '@/context/DimensionIconsContext';
 import { usePersistentState } from '@/hooks/usePersistentState';
+import type { PendingNode } from '../layout/ThreePanelLayout';
 
-type SortOrder = 'updated' | 'edges' | 'created';
+type SortOrder = 'updated' | 'edges' | 'created' | 'custom';
 
 const SORT_LABELS: Record<SortOrder, string> = {
   updated: 'Updated',
   edges: 'Edges',
   created: 'Created',
+  custom: 'Custom',
 };
 
 interface ColumnFilter {
@@ -27,13 +29,112 @@ interface DimensionSummary {
   description?: string | null;
 }
 
+const INPUT_TYPE_LABELS: Record<string, string> = {
+  youtube: 'Extracting YouTube video...',
+  website: 'Extracting webpage...',
+  pdf: 'Extracting PDF...',
+  note: 'Creating note...',
+  chat: 'Importing transcript...',
+};
+
+function PendingNodeCard({ pending, onDismiss }: { pending: PendingNode; onDismiss?: () => void }) {
+  const isError = pending.status === 'error';
+  return (
+    <div style={{
+      padding: '10px 12px',
+      background: 'transparent',
+      borderBottom: '1px solid #141414',
+      borderLeft: `3px solid ${isError ? '#ef4444' : '#22c55e'}`,
+      opacity: 0.8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '8px',
+          background: '#141414',
+          border: `1px solid ${isError ? 'rgba(239,68,68,0.3)' : '#1f1f1f'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          {isError ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <span className="pending-spinner" />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            color: isError ? '#ef4444' : '#888',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {isError ? 'Failed' : (INPUT_TYPE_LABELS[pending.inputType] || 'Processing...')}
+          </div>
+          <div style={{
+            fontSize: '11px',
+            color: '#555',
+            marginTop: '2px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {isError && pending.error ? pending.error : pending.input}
+          </div>
+        </div>
+        {isError && onDismiss && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            style={{
+              padding: '4px',
+              background: 'transparent',
+              border: 'none',
+              color: '#555',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              display: 'flex',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#555'; }}
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      <style jsx>{`
+        .pending-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid #22c55e;
+          border-top-color: transparent;
+          border-radius: 50%;
+          animation: pendingSpin 0.8s linear infinite;
+        }
+        @keyframes pendingSpin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 interface ViewsOverlayProps {
   onNodeClick: (nodeId: number) => void;
   onNodeOpenInOtherPane?: (nodeId: number) => void;
   refreshToken?: number;
+  pendingNodes?: PendingNode[];
+  onDismissPending?: (id: string) => void;
 }
 
-export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refreshToken = 0 }: ViewsOverlayProps) {
+export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refreshToken = 0, pendingNodes, onDismissPending }: ViewsOverlayProps) {
   const { dimensionIcons } = useDimensionIcons();
 
   // Dimensions for filter picker
@@ -42,6 +143,13 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
 
   // Sort order (persisted)
   const [sortOrder, setSortOrder] = usePersistentState<SortOrder>('ui.feedSortOrder', 'updated');
+
+  // Custom order (persisted) — stores node IDs in user-defined order
+  const [customOrder, setCustomOrder] = usePersistentState<number[]>('ui.feedCustomOrder', []);
+
+  // Drag-to-reorder state
+  const [reorderDragIndex, setReorderDragIndex] = useState<number | null>(null);
+  const [reorderDropIndex, setReorderDropIndex] = useState<number | null>(null);
 
   // Filter system state
   const [columns, setColumns] = useState<ColumnFilter[]>([]);
@@ -86,18 +194,37 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
   const fetchAllNodes = useCallback(async () => {
     setFilteredNodesLoading(true);
     try {
-      const response = await fetch(`/api/nodes?limit=500&sortBy=${sortOrder}`);
+      // Custom sort fetches with 'updated' then reorders client-side
+      const apiSort = sortOrder === 'custom' ? 'updated' : sortOrder;
+      const response = await fetch(`/api/nodes?limit=500&sortBy=${apiSort}`);
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to fetch nodes');
       }
-      setFilteredNodes(data.data || []);
+      const nodes: Node[] = data.data || [];
+      if (sortOrder === 'custom' && customOrder.length > 0) {
+        // Reorder nodes based on saved custom order
+        const orderMap = new Map(customOrder.map((id, idx) => [id, idx]));
+        const ordered: Node[] = [];
+        const unordered: Node[] = [];
+        for (const node of nodes) {
+          if (orderMap.has(node.id)) {
+            ordered.push(node);
+          } else {
+            unordered.push(node); // New nodes not in custom order — append at bottom
+          }
+        }
+        ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+        setFilteredNodes([...ordered, ...unordered]);
+      } else {
+        setFilteredNodes(nodes);
+      }
     } catch (error) {
       console.error('Error fetching nodes:', error);
     } finally {
       setFilteredNodesLoading(false);
     }
-  }, [sortOrder]);
+  }, [sortOrder, customOrder]);
 
   const fetchFilteredNodes = useCallback(async (filters: string[]) => {
     if (filters.length === 0) {
@@ -106,18 +233,35 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
     }
     setFilteredNodesLoading(true);
     try {
-      const response = await fetch(`/api/nodes?limit=500&sortBy=${sortOrder}&dimensions=${encodeURIComponent(filters.join(','))}&dimensionsMatch=all`);
+      const apiSort = sortOrder === 'custom' ? 'updated' : sortOrder;
+      const response = await fetch(`/api/nodes?limit=500&sortBy=${apiSort}&dimensions=${encodeURIComponent(filters.join(','))}&dimensionsMatch=all`);
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to fetch nodes');
       }
-      setFilteredNodes(data.data || []);
+      const nodes: Node[] = data.data || [];
+      if (sortOrder === 'custom' && customOrder.length > 0) {
+        const orderMap = new Map(customOrder.map((id, idx) => [id, idx]));
+        const ordered: Node[] = [];
+        const unordered: Node[] = [];
+        for (const node of nodes) {
+          if (orderMap.has(node.id)) {
+            ordered.push(node);
+          } else {
+            unordered.push(node);
+          }
+        }
+        ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+        setFilteredNodes([...ordered, ...unordered]);
+      } else {
+        setFilteredNodes(nodes);
+      }
     } catch (error) {
       console.error('Error fetching filtered nodes:', error);
     } finally {
       setFilteredNodesLoading(false);
     }
-  }, [fetchAllNodes, sortOrder]);
+  }, [fetchAllNodes, sortOrder, customOrder]);
 
   // Stringify filters for stable dependency
   const filtersKey = selectedFilters.join(',');
@@ -192,9 +336,29 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterPicker, showSortDropdown]);
 
+  // Reorder handlers
+  const handleReorderDrop = useCallback((dropIdx: number) => {
+    if (reorderDragIndex === null || reorderDragIndex === dropIdx) {
+      setReorderDragIndex(null);
+      setReorderDropIndex(null);
+      return;
+    }
+    // Reorder filteredNodes and persist
+    const newNodes = [...filteredNodes];
+    const [moved] = newNodes.splice(reorderDragIndex, 1);
+    newNodes.splice(dropIdx > reorderDragIndex ? dropIdx - 1 : dropIdx, 0, moved);
+    setFilteredNodes(newNodes);
+    setCustomOrder(newNodes.map(n => n.id));
+    setReorderDragIndex(null);
+    setReorderDropIndex(null);
+  }, [reorderDragIndex, filteredNodes, setCustomOrder]);
+
   // Render node card
-  const renderNodeCard = (node: Node) => {
+  const renderNodeCard = (node: Node, index: number) => {
     const nodeIcon = getNodeIcon(node, dimensionIcons, 18);
+    const isCustomSort = sortOrder === 'custom';
+    const isDragSource = reorderDragIndex === index;
+    const isDropTarget = reorderDropIndex === index;
 
     // Description preview — first meaningful line, truncated
     const descPreview = node.description && node.description.length > 10
@@ -212,6 +376,21 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
           e.dataTransfer.setData('application/node-info', JSON.stringify({ id: node.id, title, dimensions: node.dimensions || [] }));
           e.dataTransfer.setData('text/plain', `[NODE:${node.id}:"${title}"]`);
         }}
+        onDragOver={(e) => {
+          if (!isCustomSort || reorderDragIndex === null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setReorderDropIndex(index);
+        }}
+        onDragLeave={() => {
+          if (!isCustomSort) return;
+          setReorderDropIndex(null);
+        }}
+        onDrop={(e) => {
+          if (!isCustomSort || reorderDragIndex === null) return;
+          e.preventDefault();
+          handleReorderDrop(index);
+        }}
         style={{
           padding: '10px 12px',
           background: 'transparent',
@@ -219,6 +398,8 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
           transition: 'all 0.15s ease',
           borderBottom: '1px solid #141414',
           borderLeft: '3px solid transparent',
+          opacity: isDragSource ? 0.4 : 1,
+          borderTop: isDropTarget ? '2px solid #22c55e' : '2px solid transparent',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
@@ -234,6 +415,38 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
         }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+          {/* Grip handle — only in custom sort mode */}
+          {isCustomSort && (
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.stopPropagation();
+                setReorderDragIndex(index);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('application/x-rah-reorder', String(index));
+              }}
+              onDragEnd={() => {
+                setReorderDragIndex(null);
+                setReorderDropIndex(null);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '16px',
+                cursor: 'grab',
+                color: '#444',
+                flexShrink: 0,
+                alignSelf: 'center',
+                transition: 'color 0.15s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = '#888'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = '#444'; }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVertical size={14} />
+            </div>
+          )}
           <div style={{
             width: '32px',
             height: '32px',
@@ -622,7 +835,14 @@ export default function ViewsOverlay({ onNodeClick, onNodeOpenInOtherPane, refre
           flexDirection: 'column',
           gap: '8px'
         }}>
-          {filteredNodes.map(node => renderNodeCard(node))}
+          {pendingNodes && pendingNodes.length > 0 && pendingNodes.map(p => (
+            <PendingNodeCard
+              key={p.id}
+              pending={p}
+              onDismiss={onDismissPending ? () => onDismissPending(p.id) : undefined}
+            />
+          ))}
+          {filteredNodes.map((node, index) => renderNodeCard(node, index))}
         </div>
       )}
     </div>

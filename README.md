@@ -9,7 +9,7 @@
  ╚═╝  ╚═╝╚═╝  ╚═╝      ╚═╝  ╚═╝
 ```
 
-A local SQLite database with a UI for storing knowledge, and an MCP server so your AI tools can read/write to it.
+**TL;DR:** Clone this repository and you'll have a local SQLite database on your computer. The database schema is structured so external AI agents can continuously read and write to it, building your knowledge graph externally.
 
 **Full documentation:** [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source)
 

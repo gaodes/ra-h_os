@@ -40,7 +40,7 @@ export function generateFallbackDescription(input: DescriptionInput): string {
     return `${parts.join(' — ')}: ${title.slice(0, 200)}`;
   }
 
-  return `Knowledge item: ${title.slice(0, 250)}`;
+  return title.slice(0, 280);
 }
 
 /**
@@ -133,20 +133,24 @@ function buildDescriptionPrompt(input: DescriptionInput): string {
   const contentPreview = input.notes?.slice(0, 800) || '';
   if (contentPreview) lines.push(`Notes: ${contentPreview}${input.notes && input.notes.length > 800 ? '...' : ''}`);
 
-  return `Your job is to answer: "what is this?" in one short line. Max 280 characters.
+  return `Write a description for this knowledge node. Max 280 characters.
 
-GOAL: Include "who created it" when possible.
+Say WHAT this literally is and WHY it matters. Be concrete and specific — like you're telling a friend what this thing is in one breath.
 
-RULES (in priority order):
-1) ONLY use a creator if you have a creator hint (Author/Channel) or the content explicitly says "by <X>" / "hosted by <X>".
-   - Do NOT treat prominent people in the title/transcript (e.g. a guest) as the creator.
-   - If a creator hint is provided, prefer it.
-2) If you can identify a creator/author/channel/person/org from a creator hint, start with: "By <creator> — ..."
-3) If it's likely user-authored, start with: "Your <thing> — ..." (don't invent a creator name).
-4) If creator is unknown, do NOT guess; omit the byline.
+RULES:
+1) Name the format: "Podcast episode where…", "Blog post arguing…", "Your note on…", "Research paper showing…", "Idea that…"
+2) Name people by role — channel/host is the creator, title figures are guests/subjects. Use the Creator hint if available.
+3) State the actual claim, finding, or insight from the content — not a vague summary of the topic.
+4) End with why it's interesting or important — one concrete phrase.
+5) ABSOLUTELY FORBIDDEN — these words will be rejected: "discusses", "explores", "examines", "talks about", "is about", "delves into", "emphasizing the need for". State things directly instead.
 
-Then, in the remainder, state what it is (video/paper/article/note/idea/etc) + what it's about (high-signal).
-If unsure, say so briefly.
+GOOD: "Karpathy blog post — AI agents make software fluid, ripping functionality from repos instead of taking dependencies. Signals the end of monolithic libraries."
+GOOD: "Dwarkesh Patel interview with Anthropic CEO Dario Amodei — argues we're nearing the end of exponential AI scaling. Key signal for what comes next."
+GOOD: "Your note — morning optimism consistently reverses to evening pessimism. Not energy — the belief itself flips. Pattern worth tracking."
+BAD: "By Dario Amodei — discusses reaching the limits of exponential growth in AI, emphasizing the need for a critical perspective on future advancements."
+BAD: "This article explores ideas about how software is changing."
+
+Return ONLY the description text. Nothing else.
 
 ${lines.join('\n')}`;
 }

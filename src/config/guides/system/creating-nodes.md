@@ -28,11 +28,21 @@ When creating a node derived from existing content:
 ## Dimension Assignment
 
 - New nodes should be assigned to relevant existing dimensions
-- Check locked/priority dimensions — these auto-assign
+- Check priority dimensions — assign these when relevant
 - If no existing dimension fits, create a new one (but prefer existing)
 
 ## Description Field
 
-- AI auto-generates a ~1 sentence description after creation
-- Description is used for embeddings and search ranking (5x boost)
-- Format: what is this node about, in plain language
+The description is the most important field for AI context. It powers search (5x boost),
+appears in system prompts, and determines how agents understand the node.
+
+**Standard:** State WHAT this is + WHY it matters. Extremely concise, high-level. Max 280 characters.
+
+**Rules:**
+- NO weak verbs: "discusses", "explores", "examines", "talks about"
+- State the actual claim, insight, or purpose directly
+- Include significance or implication in 1 phrase
+- If auto-generated (omitted), the system will generate one — but agent-written descriptions are always better
+
+**Good:** "By Karpathy — Software is becoming fluid: agents can rip functionality from repos instead of taking dependencies."
+**Bad:** "This article discusses the importance of software becoming more fluid."

@@ -69,7 +69,7 @@ export interface NodeFilters {
   search?: string;           // Text search in title/content
   limit?: number;
   offset?: number;
-  sortBy?: 'updated' | 'edges' | 'created';  // Sort by updated_at, edge count, or created_at
+  sortBy?: 'updated' | 'edges' | 'created' | 'event_date';  // Sort by updated_at, edge count, created_at, or event_date
   dimensionsMatch?: 'any' | 'all';  // 'any' = OR (default), 'all' = AND
   createdAfter?: string;     // ISO date (YYYY-MM-DD) — nodes created on or after
   createdBefore?: string;    // ISO date (YYYY-MM-DD) — nodes created before

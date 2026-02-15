@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     // Handle sortBy parameter (sortBy=edges|updated|created)
     const sortByParam = searchParams.get('sortBy');
-    if (sortByParam === 'edges' || sortByParam === 'updated' || sortByParam === 'created') {
+    if (sortByParam === 'edges' || sortByParam === 'updated' || sortByParam === 'created' || sortByParam === 'event_date') {
       filters.sortBy = sortByParam;
     }
 
@@ -46,11 +46,13 @@ export async function GET(request: NextRequest) {
     }
 
     const nodes = await nodeService.getNodes(filters);
-    
+    const total = await nodeService.countNodes(filters);
+
     return NextResponse.json({
       success: true,
       data: nodes,
-      count: nodes.length
+      count: nodes.length,
+      total
     });
   } catch (error) {
     console.error('Error fetching nodes:', error);
@@ -62,10 +64,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Weak-pattern regex for post-creation quality monitoring
+const WEAK_PATTERNS = /\b(discusses|explores|examines|talks about|is about|delves into|This is a)\b/i;
+
+function sanitizeTitle(title: string): string {
+  let clean = title.trim();
+  // Strip "Title: " prefix (extraction artifact)
+  if (clean.startsWith('Title: ')) clean = clean.slice(7);
+  // Strip trailing " / X" (Twitter artifact)
+  if (clean.endsWith(' / X')) clean = clean.slice(0, -4);
+  // Collapse whitespace
+  clean = clean.replace(/\s+/g, ' ');
+  return clean.slice(0, 160);
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
+
     // Validate required fields
     if (!body.title) {
       return NextResponse.json({
@@ -74,7 +90,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Sanitize title (strip extraction artifacts)
+    body.title = sanitizeTitle(body.title);
+
     const rawNotes = typeof body.notes === 'string' ? body.notes : null;
+    const eventDate = typeof body.event_date === 'string' ? body.event_date : null;
 
     // Process provided dimensions first (needed for description generation)
     const providedDimensions = Array.isArray(body.dimensions) ? body.dimensions : [];
@@ -83,19 +103,33 @@ export async function POST(request: NextRequest) {
       .filter(Boolean)
       .slice(0, 8);
 
-    // Generate description with all available context
-    let nodeDescription: string | undefined;
-    try {
-      nodeDescription = await generateDescription({
-        title: body.title,
-        notes: rawNotes || undefined,
-        link: body.link || undefined,
-        metadata: body.metadata,
-        dimensions: trimmedProvidedDimensions
-      });
-    } catch (error) {
-      console.error('Error generating description:', error);
-      // Continue without description - dimension assignment will use content as fallback
+    // Use provided description if present, otherwise auto-generate
+    let nodeDescription: string | undefined = typeof body.description === 'string' && body.description.trim()
+      ? body.description.trim().slice(0, 280)
+      : undefined;
+
+    if (!nodeDescription) {
+      try {
+        nodeDescription = await generateDescription({
+          title: body.title,
+          notes: rawNotes || undefined,
+          link: body.link || undefined,
+          metadata: body.metadata,
+          dimensions: trimmedProvidedDimensions
+        });
+      } catch (error) {
+        console.error('Error generating description:', error);
+      }
+    }
+
+    // Final safety net — never store null/empty description
+    if (!nodeDescription || nodeDescription.trim().length === 0) {
+      nodeDescription = body.title.slice(0, 280);
+    }
+
+    // Monitor description quality
+    if (nodeDescription && WEAK_PATTERNS.test(nodeDescription)) {
+      console.warn(`[DescriptionQuality] Weak description for node "${body.title}": "${nodeDescription}"`);
     }
 
     // Auto-assign locked dimensions + keyword dimensions for all new nodes
@@ -129,6 +163,7 @@ export async function POST(request: NextRequest) {
       title: body.title,
       description: nodeDescription,
       notes: rawNotes ?? undefined,
+      event_date: eventDate ?? undefined,
       link: body.link,
       dimensions: finalDimensions,
       chunk: chunkToStore ?? undefined,

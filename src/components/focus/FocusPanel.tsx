@@ -119,7 +119,7 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
   const [regeneratingDescription, setRegeneratingDescription] = useState<number | null>(null);
 
   // Content tab state: 'notes', 'desc', or 'source'
-  const [activeContentTab, setActiveContentTab] = useState<'notes' | 'desc' | 'edges' | 'source'>('notes');
+  const [activeContentTab, setActiveContentTab] = useState<'notes' | 'desc' | 'edges' | 'source'>('desc');
 
   // Desc (description) edit mode state
   const [descEditMode, setDescEditMode] = useState(false);
@@ -2107,23 +2107,6 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                 borderBottom: '1px solid #1a1a1a'
               }}>
                 <button
-                  onClick={() => { setActiveContentTab('notes'); setDescEditMode(false); setSourceEditMode(false); }}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    fontWeight: activeContentTab === 'notes' ? 600 : 400,
-                    color: activeContentTab === 'notes' ? '#e5e5e5' : '#666',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeContentTab === 'notes' ? '2px solid #22c55e' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  Notes
-                </button>
-                <button
                   onClick={() => { setActiveContentTab('desc'); setNotesEditMode(false); setSourceEditMode(false); }}
                   style={{
                     padding: '8px 16px',
@@ -2139,6 +2122,23 @@ export default function FocusPanel({ openTabs, activeTab, onTabSelect, onNodeCli
                   }}
                 >
                   Desc
+                </button>
+                <button
+                  onClick={() => { setActiveContentTab('notes'); setDescEditMode(false); setSourceEditMode(false); }}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '11px',
+                    fontWeight: activeContentTab === 'notes' ? 600 : 400,
+                    color: activeContentTab === 'notes' ? '#e5e5e5' : '#666',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeContentTab === 'notes' ? '2px solid #22c55e' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    marginBottom: '-1px'
+                  }}
+                >
+                  Notes
                 </button>
                 <button
                   onClick={() => { setActiveContentTab('edges'); setDescEditMode(false); setNotesEditMode(false); setSourceEditMode(false); }}

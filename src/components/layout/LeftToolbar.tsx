@@ -4,9 +4,11 @@ import { useState, useCallback } from 'react';
 import {
   Search,
   Plus,
+  RefreshCw,
   LayoutList,
   Map,
   Folder,
+  Table2,
   Settings,
 } from 'lucide-react';
 import type { PaneType } from '../panes/types';
@@ -14,6 +16,7 @@ import type { PaneType } from '../panes/types';
 interface LeftToolbarProps {
   onSearchClick: () => void;
   onAddStuffClick: () => void;
+  onRefreshClick: () => void;
   onSettingsClick: () => void;
   onPaneTypeClick: (paneType: PaneType) => void;
   activePane: 'A' | 'B';
@@ -26,16 +29,18 @@ const PANE_TYPE_ICONS: Record<string, typeof LayoutList> = {
   views: LayoutList,
   map: Map,
   dimensions: Folder,
+  table: Table2,
 };
 
 const PANE_TYPE_LABELS: Record<string, string> = {
   views: 'Feed',
   map: 'Map',
   dimensions: 'Dimensions',
+  table: 'Table',
 };
 
 // Pane types shown in the toolbar (excludes 'node', 'chat', and 'guides' which is in settings)
-const TOOLBAR_PANE_TYPES: PaneType[] = ['views', 'map', 'dimensions'];
+const TOOLBAR_PANE_TYPES: PaneType[] = ['views', 'map', 'dimensions', 'table'];
 
 interface ToolbarButtonProps {
   icon: typeof Search;
@@ -140,6 +145,7 @@ function PaneTypeButton({ icon: Icon, label, paneType, isOpen, isActivePane, onC
 export default function LeftToolbar({
   onSearchClick,
   onAddStuffClick,
+  onRefreshClick,
   onSettingsClick,
   onPaneTypeClick,
   activePane,
@@ -179,6 +185,12 @@ export default function LeftToolbar({
           icon={Plus}
           label="Add Stuff"
           onClick={onAddStuffClick}
+        />
+        <ToolbarButton
+          icon={RefreshCw}
+          label="Refresh"
+          shortcut="⌘⇧R"
+          onClick={onRefreshClick}
         />
       </div>
 

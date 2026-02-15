@@ -51,16 +51,6 @@ function buildTaskPrompt(type: QuickAddInputType, input: string): string {
   }
 }
 
-function buildExpectedOutcome(type: QuickAddInputType): string {
-  if (type === 'note') {
-    return 'Call createNode with the user input as content. Use a descriptive title extracted from the first few words. Set dimensions to an empty array. Return a brief confirmation like "Created note [NODE:id:title]"';
-  }
-  if (type === 'chat') {
-    return 'Store the entire transcript in chunk_content, summarize the conversation into content, and return a confirmation like "Created chat transcript node [NODE:id:title]"';
-  }
-  return 'Use the appropriate extraction tool (youtubeExtract, websiteExtract, or paperExtract) to create the node. Return the standard extraction summary.';
-}
-
 type ExtractionQuickAddType = Extract<QuickAddInputType, 'youtube' | 'website' | 'pdf'>;
 
 const EXTRACTION_TOOL_MAP = {
@@ -207,7 +197,7 @@ async function handleNoteQuickAdd(rawInput: string, task: string, userDescriptio
   const title = deriveNoteTitle(content);
   const nodePayload: Record<string, unknown> = {
     title,
-    content,
+    notes: content,
     metadata: {
       source: 'quick-add-note',
       refined_at: new Date().toISOString(),
@@ -312,7 +302,7 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title,
-      content,
+      notes: content,
       chunk: transcript,
       metadata,
     }),
@@ -341,41 +331,58 @@ async function handleChatTranscriptQuickAdd(rawInput: string, task: string): Pro
 }
 
 export interface QuickAddResult {
-  success: boolean;
+  id: string;
+  task: string;
+  inputType: QuickAddInputType;
+  status: 'queued' | 'completed' | 'failed';
   summary?: string;
   error?: string;
-  nodeId?: number;
 }
 
 export async function enqueueQuickAdd({ rawInput, mode, description }: QuickAddInput): Promise<QuickAddResult> {
   const inputType = detectInputType(rawInput, mode);
   const task = buildTaskPrompt(inputType, rawInput);
+  const id = `qa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  try {
-    let summary: string;
-    if (inputType === 'note') {
-      summary = await handleNoteQuickAdd(rawInput, task, description);
-    } else if (inputType === 'chat') {
-      summary = await handleChatTranscriptQuickAdd(rawInput, task);
-    } else {
-      summary = await handleExtractionQuickAdd(inputType as ExtractionQuickAddType, rawInput, task);
-    }
+  const result: QuickAddResult = {
+    id,
+    task,
+    inputType,
+    status: 'queued',
+  };
 
-    // Extract node ID from summary if present
-    const nodeIdMatch = summary.match(/\[NODE:(\d+)/);
-    const nodeId = nodeIdMatch ? parseInt(nodeIdMatch[1], 10) : undefined;
+  // Run async - fire and forget
+  setImmediate(async () => {
+    try {
+      let summary: string;
+      if (inputType === 'note') {
+        summary = await handleNoteQuickAdd(rawInput, task, description);
+      } else if (inputType === 'chat') {
+        summary = await handleChatTranscriptQuickAdd(rawInput, task);
+      } else {
+        summary = await handleExtractionQuickAdd(inputType as ExtractionQuickAddType, rawInput, task);
+      }
 
-    // Broadcast node created event
-    if (nodeId) {
+      console.log(`[QuickAdd] Completed: ${task}`);
+      // Broadcast completion so ThreePanelLayout can remove the pending placeholder
+      eventBroadcaster.broadcast({
+        type: 'QUICK_ADD_COMPLETED',
+        data: { quickAddId: id, source: 'quick-add' }
+      });
+      // Also broadcast NODE_CREATED to refresh the feed
       eventBroadcaster.broadcast({
         type: 'NODE_CREATED',
-        data: { node: { id: nodeId, title: 'Quick Add' } }
+        data: { node: { title: task }, source: 'quick-add' }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      console.error(`[QuickAdd] Failed: ${task} - ${message}`);
+      eventBroadcaster.broadcast({
+        type: 'QUICK_ADD_FAILED',
+        data: { quickAddId: id, error: message, source: 'quick-add' }
       });
     }
+  });
 
-    return { success: true, summary, nodeId };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'unknown error';
-    return { success: false, error: `Quick Add failed: ${message}` };
-  }
+  return result;
 }

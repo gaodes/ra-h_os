@@ -7,6 +7,46 @@ export class NodeService {
     return this.getNodesSQLite(filters);
   }
 
+  async countNodes(filters: NodeFilters = {}): Promise<number> {
+    const { dimensions, search, dimensionsMatch = 'any',
+            createdAfter, createdBefore, eventAfter, eventBefore } = filters;
+    const sqlite = getSQLiteClient();
+
+    let query = `SELECT COUNT(*) as total FROM nodes n WHERE 1=1`;
+    const params: any[] = [];
+
+    if (dimensions && dimensions.length > 0) {
+      if (dimensionsMatch === 'all' && dimensions.length > 1) {
+        query += ` AND (
+          SELECT COUNT(DISTINCT nd.dimension) FROM node_dimensions nd
+          WHERE nd.node_id = n.id
+          AND nd.dimension IN (${dimensions.map(() => '?').join(',')})
+        ) = ?`;
+        params.push(...dimensions, dimensions.length);
+      } else {
+        query += ` AND EXISTS (
+          SELECT 1 FROM node_dimensions nd
+          WHERE nd.node_id = n.id
+          AND nd.dimension IN (${dimensions.map(() => '?').join(',')})
+        )`;
+        params.push(...dimensions);
+      }
+    }
+
+    if (search) {
+      query += ` AND (n.title LIKE ? COLLATE NOCASE OR n.description LIKE ? COLLATE NOCASE OR n.notes LIKE ? COLLATE NOCASE)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (createdAfter) { query += ` AND n.created_at >= ?`; params.push(createdAfter); }
+    if (createdBefore) { query += ` AND n.created_at < ?`; params.push(createdBefore); }
+    if (eventAfter) { query += ` AND n.event_date >= ?`; params.push(eventAfter); }
+    if (eventBefore) { query += ` AND n.event_date < ?`; params.push(eventBefore); }
+
+    const result = sqlite.query<{ total: number }>(query, params);
+    return result.rows[0]?.total ?? 0;
+  }
+
   // PostgreSQL path removed in SQLite-only consolidation
 
   private async getNodesSQLite(filters: NodeFilters = {}): Promise<Node[]> {
@@ -94,6 +134,8 @@ export class NodeService {
       query += ' ORDER BY edge_count DESC, n.updated_at DESC';
     } else if (sortBy === 'created') {
       query += ' ORDER BY n.created_at DESC';
+    } else if (sortBy === 'event_date') {
+      query += ' ORDER BY n.event_date IS NULL, n.event_date DESC, n.updated_at DESC';
     } else {
       query += ' ORDER BY n.updated_at DESC';
     }

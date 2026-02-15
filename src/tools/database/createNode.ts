@@ -6,8 +6,10 @@ export const createNodeTool = tool({
   description: 'Create node with title/content/link and optional dimensions (locked dimensions auto-assigned)',
   inputSchema: z.object({
     title: z.string().describe('The title of the node'),
-    notes: z.string().optional().describe('The main notes, description, or notes for this node'),
+    description: z.string().max(280).optional().describe('WHAT this is + WHY it matters. Extremely concise. No "discusses/explores". Auto-generated if omitted.'),
+    notes: z.string().optional().describe('The main notes or content for this node'),
     link: z.string().optional().describe('A URL link to the source'),
+    event_date: z.string().optional().describe('ISO date string for time-anchored nodes (e.g. meetings, events)'),
     dimensions: z
       .array(z.string())
       .max(5)

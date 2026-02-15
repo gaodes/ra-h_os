@@ -21,12 +21,21 @@ type AgentDelegation = {
   updatedAt: string;
 };
 
+export interface PendingNode {
+  id: string;
+  input: string;
+  inputType: string;
+  submittedAt: number;
+  status: 'processing' | 'error';
+  error?: string;
+}
+
 // Layout components
 import LeftToolbar from './LeftToolbar';
 import SplitHandle from './SplitHandle';
 
 // Pane components (ChatPane removed in rah-light, GuidesPane moved to settings)
-import { NodePane, DimensionsPane, MapPane, ViewsPane } from '../panes';
+import { NodePane, DimensionsPane, MapPane, ViewsPane, TablePane } from '../panes';
 import QuickAddInput from '../agents/QuickAddInput';
 import type { PaneType, SlotState, PaneAction } from '../panes/types';
 
@@ -99,6 +108,9 @@ export default function ThreePanelLayout() {
     selectedText: string;
   } | null>(null);
 
+  // Pending quick-add nodes (loading placeholders)
+  const [pendingNodes, setPendingNodes] = useState<PendingNode[]>([]);
+
   // Ref to get current openTabs value in SSE handler
   const openTabsRef = useRef<number[]>([]);
 
@@ -164,15 +176,22 @@ export default function ThreePanelLayout() {
     }
   };
 
-  // Update tab data whenever openTabs changes (use string key to prevent infinite loops)
+  // Update tab data whenever openTabs changes or focus panel refreshes (use string key to prevent infinite loops)
   const openTabsKey = openTabs.join(',');
   useEffect(() => {
     openTabsRef.current = openTabs;
     fetchOpenTabsData(openTabs);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTabsKey]);
+  }, [openTabsKey, focusPanelRefresh]);
 
   // Delegations loading removed (delegation system removed in rah-light)
+
+  // Refresh all panes
+  const handleRefreshAll = useCallback(() => {
+    setNodesPanelRefresh(prev => prev + 1);
+    setFolderViewRefresh(prev => prev + 1);
+    setFocusPanelRefresh(prev => prev + 1);
+  }, []);
 
   // Keyboard shortcut handler
   useEffect(() => {
@@ -192,6 +211,11 @@ export default function ThreePanelLayout() {
           setSlotB({ type: 'node', nodeTabs: [], activeNodeTab: null });
         }
       }
+      // Cmd+Shift+R - refresh all panes
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'r') {
+        e.preventDefault();
+        handleRefreshAll();
+      }
       // Cmd+N - open Add Stuff modal
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         // Don't prevent default - browser may want this for new window
@@ -205,7 +229,7 @@ export default function ThreePanelLayout() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slotB, setSlotB]);
+  }, [slotB, setSlotB, handleRefreshAll]);
 
   // SSE connection for real-time updates
   useEffect(() => {
@@ -274,6 +298,22 @@ export default function ThreePanelLayout() {
               }
               break;
 
+            case 'QUICK_ADD_COMPLETED':
+              if (data.data?.quickAddId) {
+                setPendingNodes(prev => prev.filter(p => p.id !== data.data.quickAddId));
+              }
+              break;
+
+            case 'QUICK_ADD_FAILED':
+              if (data.data?.quickAddId) {
+                setPendingNodes(prev => prev.map(p =>
+                  p.id === data.data.quickAddId
+                    ? { ...p, status: 'error' as const, error: data.data.error || 'Unknown error' }
+                    : p
+                ));
+              }
+              break;
+
             case 'CONNECTION_ESTABLISHED':
               console.log('✅ SSE connection established');
               break;
@@ -300,6 +340,21 @@ export default function ThreePanelLayout() {
       }
     };
   }, []);
+
+  // Auto-dismiss pending nodes after timeout
+  useEffect(() => {
+    if (pendingNodes.length === 0) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setPendingNodes(prev => prev.filter(p => {
+        const age = now - p.submittedAt;
+        if (p.status === 'processing' && age > 90_000) return false; // 90s timeout
+        if (p.status === 'error' && age > 120_000) return false; // 120s for errors
+        return true;
+      }));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [pendingNodes.length]);
 
   // Node tab management
   const handleNodeSelect = useCallback((nodeId: number, multiSelect: boolean) => {
@@ -405,27 +460,6 @@ export default function ThreePanelLayout() {
     setActivePane('A');
   }, [slotA, setSlotA]);
 
-  // Handle Quick Add submit (used by global Add Stuff modal)
-  const handleQuickAddSubmit = useCallback(async ({ input, mode, description }: { input: string; mode: 'link' | 'note' | 'chat'; description?: string }) => {
-    try {
-      const response = await fetch('/api/quick-add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, mode, description })
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to submit Quick Add');
-      }
-
-      // Close the modal on success
-      setShowAddStuff(false);
-    } catch (error) {
-      console.error('[ThreePanelLayout] Quick Add error:', error);
-    }
-  }, []);
-
   const handleNodeDeleted = useCallback((nodeId: number) => {
     handleCloseTab(nodeId);
   }, [handleCloseTab]);
@@ -493,6 +527,51 @@ export default function ThreePanelLayout() {
       }) : { type: paneType });
     }
   }, [activePane, slotA, slotB, setSlotA, setSlotB]);
+
+  // Ensure the Feed pane is visible (for quick-add loading placeholders)
+  const ensureFeedOpen = useCallback(() => {
+    if (slotA?.type === 'views') return;
+    if (slotB?.type === 'views') return;
+    handlePaneTypeClick('views');
+  }, [slotA, slotB, handlePaneTypeClick]);
+
+  // Handle Quick Add submit (used by global Add Stuff modal)
+  const handleQuickAddSubmit = useCallback(async ({ input, mode, description }: { input: string; mode: 'link' | 'note' | 'chat'; description?: string }) => {
+    try {
+      const response = await fetch('/api/quick-add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, mode, description })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to submit Quick Add');
+      }
+
+      const result = await response.json();
+      const delegation = result.delegation;
+
+      // Add pending placeholder
+      if (delegation?.id && delegation?.inputType) {
+        setPendingNodes(prev => [{
+          id: delegation.id,
+          input: input.slice(0, 120),
+          inputType: delegation.inputType,
+          submittedAt: Date.now(),
+          status: 'processing' as const,
+        }, ...prev]);
+      }
+
+      // Ensure feed pane is visible
+      ensureFeedOpen();
+
+      // Close the modal on success
+      setShowAddStuff(false);
+    } catch (error) {
+      console.error('[ThreePanelLayout] Quick Add error:', error);
+    }
+  }, [ensureFeedOpen]);
 
   // Handle closing a pane
   const handleCloseSlotA = useCallback(() => {
@@ -860,6 +939,24 @@ export default function ThreePanelLayout() {
             }}
             onNodeOpenInOtherPane={slot === 'A' ? handleNodeOpenInSlotB : handleNodeOpenInSlotA}
             refreshToken={nodesPanelRefresh}
+            pendingNodes={pendingNodes}
+            onDismissPending={(id) => setPendingNodes(prev => prev.filter(p => p.id !== id))}
+          />
+        );
+
+      case 'table':
+        return (
+          <TablePane
+            slot={slot}
+            isActive={isActive}
+            onPaneAction={slot === 'A' ? handleSlotAAction : handleSlotBAction}
+            onCollapse={onCollapse}
+            onSwapPanes={slotB ? handleSwapPanes : undefined}
+            onNodeClick={(nodeId) => {
+              handleNodeSelect(nodeId, false);
+              setActivePane(slot);
+            }}
+            refreshToken={nodesPanelRefresh}
           />
         );
 
@@ -892,6 +989,7 @@ export default function ThreePanelLayout() {
         activePane={activePane}
         slotAType={slotA?.type ?? null}
         slotBType={slotB?.type ?? null}
+        onRefreshClick={handleRefreshAll}
       />
 
       {/* Main content area */}
@@ -931,7 +1029,7 @@ export default function ThreePanelLayout() {
               display: 'flex',
               flexDirection: 'column',
               // Center single pane (except map)
-              ...((!slotB && slotA.type !== 'map') ? {
+              ...((!slotB && slotA.type !== 'map' && slotA.type !== 'table') ? {
                 maxWidth: '900px',
                 margin: '0 auto',
                 width: '100%',

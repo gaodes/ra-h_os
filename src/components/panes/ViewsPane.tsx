@@ -3,11 +3,14 @@
 import PaneHeader from './PaneHeader';
 import ViewsOverlay from '../views/ViewsOverlay';
 import type { BasePaneProps, PaneAction, PaneType } from './types';
+import type { PendingNode } from '../layout/ThreePanelLayout';
 
 export interface ViewsPaneProps extends BasePaneProps {
   onNodeClick: (nodeId: number) => void;
   onNodeOpenInOtherPane?: (nodeId: number) => void;
   refreshToken?: number;
+  pendingNodes?: PendingNode[];
+  onDismissPending?: (id: string) => void;
 }
 
 export default function ViewsPane({
@@ -18,7 +21,9 @@ export default function ViewsPane({
   onSwapPanes,
   onNodeClick,
   onNodeOpenInOtherPane,
-  refreshToken
+  refreshToken,
+  pendingNodes,
+  onDismissPending,
 }: ViewsPaneProps) {
   const handleTypeChange = (type: PaneType) => {
     onPaneAction?.({ type: 'switch-pane-type', paneType: type });
@@ -38,6 +43,8 @@ export default function ViewsPane({
           onNodeClick={onNodeClick}
           onNodeOpenInOtherPane={onNodeOpenInOtherPane}
           refreshToken={refreshToken}
+          pendingNodes={pendingNodes}
+          onDismissPending={onDismissPending}
         />
       </div>
     </div>

@@ -97,11 +97,6 @@ export default function LogsRow({ log, isEven }: LogsRowProps) {
                   🧵 {metrics.thread.substring(0, 16)}…
                 </span>
               )}
-              {metrics.cost_usd !== undefined && (
-                <span style={{ color: '#34d399' }}>
-                  💰 ${metrics.cost_usd.toFixed(6)}
-                </span>
-              )}
               {metrics.input_tokens !== undefined && metrics.output_tokens !== undefined && (
                 <span>
                   📊 {metrics.input_tokens}↓ {metrics.output_tokens}↑

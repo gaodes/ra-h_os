@@ -5,61 +5,55 @@ import { generateText } from 'ai';
 import { extractYouTube } from '@/services/typescript/extractors/youtube';
 import { formatNodeForChat } from '../infrastructure/nodeFormatter';
 
-// Available segments for categorization - match database constraint
-const AVAILABLE_SEGMENTS = [
-  'inbox', 'parking', 'in progress', 'archive'
-];
-
 // AI-powered content analysis
 async function analyzeContentWithAI(title: string, description: string, contentType: string) {
   try {
-    const prompt = `Analyze this ${contentType} content and provide classification:
+    const prompt = `Analyze this ${contentType} content and provide classification.
 
 Title: "${title}"
 Description: "${description}"
 
-Available types: ${AVAILABLE_SEGMENTS.join(', ')}
+CRITICAL — nodeDescription rules (max 280 chars):
+1. Say WHAT this literally is: "Podcast episode where…", "Talk by…", "Interview with…", "Video essay on…"
+2. Name people by their role: the channel/host is the creator, anyone in the title is likely the guest or subject.
+3. State the actual claim or thesis from the title — don't paraphrase into vague abstractions.
+4. End with why it's interesting or important — one concrete phrase.
+5. ABSOLUTELY FORBIDDEN: "discusses", "explores", "examines", "talks about", "delves into", "emphasizing the need for". State things directly.
+
+Examples:
+- Title: "Dario Amodei — We are near the end of the exponential" / Channel: Dwarkesh Patel
+  GOOD: "Dwarkesh Patel interview with Anthropic CEO Dario Amodei — argues we're nearing the end of exponential AI scaling. Key signal for what the next phase of AI development looks like."
+  BAD: "By Dario Amodei — discusses reaching the limits of exponential growth in AI, emphasizing the need for a critical perspective."
+
+- Title: "The spell of language models" / Channel: Andrej Karpathy
+  GOOD: "Karpathy talk on how LLMs work under the hood — tokenization, attention, and why they feel like magic but aren't. Essential mental model for anyone building with LLMs."
+  BAD: "By Andrej Karpathy — explores the nature of language models and their capabilities."
 
 Respond with ONLY valid JSON (no markdown, no code blocks):
 {
-  "enhancedDescription": "A comprehensive summary of what this content is about (can be several paragraphs, up to ~1500 characters)",
-  "tags": ["relevant", "semantic", "tags", "like", "ai", "economics", "research"],
-  "segments": ["research"],
-  "reasoning": "Brief explanation of why you chose these categories"
-}
-
-Guidelines:
-- Choose 1 segment that best fits the content type
-- enhancedDescription should be thorough - cover key points, arguments, and takeaways
-- Aim for 3-6 paragraphs or 800-1500 characters - don't artificially truncate
-- Include 3-8 relevant semantic tags (not just generic ones)
-- For AI/ML content, include tags like: ai, machine-learning, artificial-intelligence, deep-learning
-- For economics content, include: economics, finance, markets, policy
-- Be specific and insightful
-- Return ONLY the JSON object, no other text`;
+  "enhancedDescription": "A comprehensive summary (3-6 paragraphs, 800-1500 chars). Cover key points, arguments, takeaways.",
+  "nodeDescription": "<your 280-char description following the rules above>",
+  "tags": ["relevant", "semantic", "tags"],
+  "reasoning": "Brief explanation of classification choices"
+}`;
 
     const response = await generateText({
-      model: openai('gpt-5-mini'),
+      model: openai('gpt-4o-mini'),
       prompt,
       maxOutputTokens: 800
     });
 
     let content = response.text || '{}';
-    
+
     // Clean up the response - remove markdown code blocks if present
     content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    
+
     const result = JSON.parse(content);
-    
-    // Validate segments are from available list
-    const validSegments = result.segments?.filter((seg: string) => 
-      AVAILABLE_SEGMENTS.includes(seg)
-    ) || [];
 
     return {
       enhancedDescription: result.enhancedDescription || description,
+      nodeDescription: typeof result.nodeDescription === 'string' ? result.nodeDescription.slice(0, 280) : undefined,
       tags: Array.isArray(result.tags) ? result.tags : [],
-      segments: validSegments,
       reasoning: result.reasoning || 'AI analysis completed'
     };
   } catch (error) {
@@ -67,8 +61,8 @@ Guidelines:
     console.warn('YouTube analysis fallback (using default description):', message);
     return {
       enhancedDescription: description,
+      nodeDescription: undefined,
       tags: [],
-      segments: [],
       reasoning: 'Fallback description used'
     };
   }
@@ -79,7 +73,7 @@ async function summariseTranscript(title: string, transcript: string): Promise<s
     return null;
   }
 
-  // Limit transcript length to keep token costs manageable (approx ≤4k tokens for gpt-4o-mini)
+  // Limit transcript length to keep token costs manageable
   const MAX_CHARS = 16000;
   let excerpt = transcript.trim();
   if (excerpt.length > MAX_CHARS) {
@@ -179,8 +173,8 @@ export const youtubeExtractTool = tool({
       // Step 3: Create node with extracted content and AI analysis
       const nodeTitle = title || result.metadata?.video_title || `YouTube Video ${url.split('/').pop()?.split('?')[0]}`;
       const transcriptSummary = await summariseTranscript(nodeTitle, result.chunk || result.notes || '');
-      const content = transcriptSummary || aiAnalysis?.enhancedDescription || `YouTube video by ${result.metadata?.channel_name || 'Unknown Channel'}`;
-      
+      const nodeNotes = transcriptSummary || aiAnalysis?.enhancedDescription || `YouTube video by ${result.metadata?.channel_name || 'Unknown Channel'}`;
+
       const suppliedDimensions = Array.isArray(dimensions) ? dimensions : [];
       let trimmedDimensions = suppliedDimensions
         .map(dim => (typeof dim === 'string' ? dim.trim() : ''))
@@ -193,7 +187,8 @@ export const youtubeExtractTool = tool({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: nodeTitle,
-          content,
+          description: aiAnalysis?.nodeDescription,
+          notes: nodeNotes,
           link: url,
           dimensions: trimmedDimensions,
           chunk: result.chunk || result.notes,

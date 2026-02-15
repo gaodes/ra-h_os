@@ -7,8 +7,10 @@ export const updateNodeTool = tool({
     id: z.number().describe('The ID of the node to update'),
     updates: z.object({
       title: z.string().optional().describe('New title'),
-      notes: z.string().optional().describe('New content/description/notes'),
+      description: z.string().max(280).optional().describe('New description (overwrites existing). WHAT this is + WHY it matters. No "discusses/explores".'),
+      notes: z.string().optional().describe('New notes (appended to existing)'),
       link: z.string().optional().describe('New link'),
+      event_date: z.string().optional().describe('ISO date string for time-anchored nodes'),
       dimensions: z.array(z.string()).optional().describe('New dimension tags - completely replaces existing dimensions'),
       chunk: z.string().optional().describe('New chunk content'),
       metadata: z.record(z.any()).optional().describe('New metadata - completely replaces existing metadata')
@@ -79,7 +81,7 @@ export const updateNodeTool = tool({
       // Call the nodes API endpoint
       const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/nodes/${id}`, {
         method: 'PUT',
-        headers: { 'Notes-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
       });
 
