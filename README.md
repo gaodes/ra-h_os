@@ -11,6 +11,8 @@
 
 **TL;DR:** Clone this repository and you'll have a local SQLite database on your computer. The database schema is structured so external AI agents can continuously read and write to it, building your knowledge graph externally.
 
+[![Watch the demo](https://img.youtube.com/vi/IA02YB8mInM/maxresdefault.jpg)](https://youtu.be/IA02YB8mInM)
+
 > **Currently macOS only.** Linux and Windows support is coming. If you want to run it on Linux/Windows now, see [instructions at the bottom](#linuxwindows).
 
 **Full documentation:** [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source)
