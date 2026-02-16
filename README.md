@@ -11,6 +11,8 @@
 
 **TL;DR:** Clone this repository and you'll have a local SQLite database on your computer. The database schema is structured so external AI agents can continuously read and write to it, building your knowledge graph externally.
 
+> **Currently macOS only.** Linux and Windows support is coming. If you want to run it on Linux/Windows now, see [instructions at the bottom](#linuxwindows).
+
 **Full documentation:** [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source)
 
 ---
@@ -182,10 +184,23 @@ See [ra-h.app/docs/open-source](https://ra-h.app/docs/open-source) for full sche
 
 ## Linux/Windows
 
-The bundled sqlite-vec binary only works on macOS. For other platforms:
+The repo ships with a macOS binary for sqlite-vec (`vendor/sqlite-extensions/vec0.dylib`). On Linux or Windows you need to swap it for your platform's version.
 
-1. Build sqlite-vec from [github.com/asg017/sqlite-vec](https://github.com/asg017/sqlite-vec)
-2. Place at `vendor/sqlite-extensions/vec0.so` (Linux) or `vec0.dll` (Windows)
+**Linux:**
+
+1. Go to [sqlite-vec releases](https://github.com/asg017/sqlite-vec/releases)
+2. Download the release matching your architecture (e.g. `sqlite-vec-0.1.6-loadable-linux-x86_64.tar.gz`)
+3. Extract `vec0.so` from the archive
+4. Copy it to `vendor/sqlite-extensions/vec0.so` in this repo
+5. Run the normal install steps above
+
+**Windows:**
+
+1. Go to [sqlite-vec releases](https://github.com/asg017/sqlite-vec/releases)
+2. Download the Windows release (e.g. `sqlite-vec-0.1.6-loadable-windows-x86_64.zip`)
+3. Extract `vec0.dll` from the archive
+4. Copy it to `vendor/sqlite-extensions/vec0.dll` in this repo
+5. Run the normal install steps above
 
 Without sqlite-vec, everything works except semantic/vector search.
 
