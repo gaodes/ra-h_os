@@ -3,15 +3,15 @@
  * Embeds node metadata (title, content, dimensions, AI analysis) into nodes.embedding field
  */
 
-import OpenAI from 'openai';
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { 
-  createDatabaseConnection, 
+import OpenAI from "openai";
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import {
+  createDatabaseConnection,
   serializeFloat32Vector,
   formatEmbeddingText,
-  batchProcess 
-} from './sqlite-vec';
+  batchProcess,
+} from "./sqlite-vec";
 
 interface NodeRecord {
   id: number;
@@ -40,9 +40,9 @@ export class NodeEmbedder {
   constructor() {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is not set');
+      throw new Error("OPENAI_API_KEY environment variable is not set");
     }
-    
+
     this.openaiClient = new OpenAI({ apiKey });
     this.openaiProvider = createOpenAI({ apiKey });
     this.db = createDatabaseConnection();
@@ -52,20 +52,25 @@ export class NodeEmbedder {
    * Analyze node content with AI to extract insights
    */
   private async analyzeNodeWithAI(node: NodeRecord): Promise<string> {
-    const dimensions = node.dimensions_json ? JSON.parse(node.dimensions_json) : [];
-    const dimensionsText = Array.isArray(dimensions) && dimensions.length ? dimensions.join(', ') : 'none';
-    
+    const dimensions = node.dimensions_json
+      ? JSON.parse(node.dimensions_json)
+      : [];
+    const dimensionsText =
+      Array.isArray(dimensions) && dimensions.length
+        ? dimensions.join(", ")
+        : "none";
+
     const prompt = `Analyze this content and provide 2-3 key insights or themes in a concise paragraph (max 100 words):
 
 Title: ${node.title}
-Content: ${node.notes || 'No content'}
+Content: ${node.notes || "No content"}
 Dimensions: ${dimensionsText}
 
 Focus on the main concepts, key relationships, and practical implications.`;
 
     try {
       const { text } = await generateText({
-        model: this.openaiProvider('gpt-4o-mini'),
+        model: this.openaiProvider("gpt-4o-mini"),
         prompt,
         maxOutputTokens: 150,
         temperature: 0.3,
@@ -74,7 +79,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
       return text;
     } catch (error) {
       console.error(`AI analysis failed for node ${node.id}:`, error);
-      return '';
+      return "";
     }
   }
 
@@ -83,17 +88,20 @@ Focus on the main concepts, key relationships, and practical implications.`;
    */
   private async generateEmbedding(text: string): Promise<number[]> {
     const response = await this.openaiClient.embeddings.create({
-      model: 'text-embedding-3-small',
+      model: "text-embedding-3-small",
       input: text,
     });
-    
+
     return response.data[0].embedding;
   }
 
   /**
    * Embed a single node
    */
-  private async embedNode(node: NodeRecord, forceReEmbed: boolean = false): Promise<void> {
+  private async embedNode(
+    node: NodeRecord,
+    forceReEmbed: boolean = false,
+  ): Promise<void> {
     // Skip if already embedded and not forcing
     if (node.embedding && !forceReEmbed) {
       console.log(`Skipping node ${node.id} - already has embedding`);
@@ -101,14 +109,16 @@ Focus on the main concepts, key relationships, and practical implications.`;
     }
 
     // Parse dimensions from JSON string
-    const dimensions = node.dimensions_json ? JSON.parse(node.dimensions_json) : [];
-    
+    const dimensions = node.dimensions_json
+      ? JSON.parse(node.dimensions_json)
+      : [];
+
     // Create base embedding text
     let embeddingText = formatEmbeddingText(
       node.title,
-      node.notes || '',
+      node.notes || "",
       dimensions,
-      node.description
+      node.description,
     );
 
     // Add AI analysis if content exists
@@ -123,7 +133,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
       // Generate embedding
       const embedding = await this.generateEmbedding(embeddingText);
       const embeddingBlob = serializeFloat32Vector(embedding);
-      
+
       // Update database
       const updateStmt = this.db.prepare(`
         UPDATE nodes 
@@ -132,32 +142,38 @@ Focus on the main concepts, key relationships, and practical implications.`;
             embedding_text = ?
         WHERE id = ?
       `);
-      
+
       const now = new Date().toISOString();
       updateStmt.run(embeddingBlob, now, embeddingText, node.id);
-      
+
       // Update vec_nodes virtual table
       try {
         // Determine correct column name for primary key (node_id vs id)
         // Use declared PK column from your DB schema (confirmed: node_id)
-        const pkCol = 'node_id';
+        const pkCol = "node_id";
 
         // Delete existing entry if any
-        const deleteStmt = this.db.prepare(`DELETE FROM vec_nodes WHERE ${pkCol} = ?`);
+        const deleteStmt = this.db.prepare(
+          `DELETE FROM vec_nodes WHERE ${pkCol} = ?`,
+        );
         deleteStmt.run(BigInt(node.id));
-        
+
         // Insert new entry (use bracketed string format compatible with sqlite-vec)
-        const vectorString = `[${embedding.join(',')}]`;
-        const insertStmt = this.db.prepare(`INSERT INTO vec_nodes (${pkCol}, embedding) VALUES (?, ?)`);
+        const vectorString = `[${embedding.join(",")}]`;
+        const insertStmt = this.db.prepare(
+          `INSERT INTO vec_nodes (${pkCol}, embedding) VALUES (?, ?)`,
+        );
         insertStmt.run(BigInt(node.id), vectorString);
       } catch (vecError) {
-        console.warn(`Could not update vec_nodes for node ${node.id}:`, vecError);
+        console.warn(
+          `Could not update vec_nodes for node ${node.id}:`,
+          vecError,
+        );
         // Continue - main embedding is still saved
       }
-      
+
       this.processedCount++;
       console.log(`✓ Embedded node ${node.id}: "${node.title}"`);
-      
     } catch (error) {
       this.failedCount++;
       console.error(`✗ Failed to embed node ${node.id}:`, error);
@@ -168,16 +184,18 @@ Focus on the main concepts, key relationships, and practical implications.`;
   /**
    * Embed nodes based on options
    */
-  async embedNodes(options: EmbedNodeOptions = {}): Promise<{ processed: number; failed: number }> {
+  async embedNodes(
+    options: EmbedNodeOptions = {},
+  ): Promise<{ processed: number; failed: number }> {
     const { nodeId, forceReEmbed = false, verbose = false } = options;
-    
+
     let query: string;
     let params: any[] = [];
-    
+
     if (nodeId) {
       // Single node
       query = `
-        SELECT n.id, n.title, n.content, n.description,
+        SELECT n.id, n.title, n.notes, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at
@@ -188,7 +206,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
     } else if (forceReEmbed) {
       // All nodes
       query = `
-        SELECT n.id, n.title, n.content, n.description,
+        SELECT n.id, n.title, n.notes, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at
@@ -198,7 +216,7 @@ Focus on the main concepts, key relationships, and practical implications.`;
     } else {
       // Only nodes without embeddings
       query = `
-        SELECT n.id, n.title, n.content, n.description,
+        SELECT n.id, n.title, n.notes, n.description,
                COALESCE((SELECT JSON_GROUP_ARRAY(d.dimension)
                         FROM node_dimensions d WHERE d.node_id = n.id), '[]') as dimensions_json,
                n.embedding, n.embedding_updated_at
@@ -207,17 +225,17 @@ Focus on the main concepts, key relationships, and practical implications.`;
         ORDER BY n.id
       `;
     }
-    
+
     const stmt = this.db.prepare(query);
     const nodes = stmt.all(...params) as NodeRecord[];
-    
+
     if (nodes.length === 0) {
-      console.log('No nodes to process');
+      console.log("No nodes to process");
       return { processed: 0, failed: 0 };
     }
-    
+
     console.log(`Processing ${nodes.length} nodes...`);
-    
+
     // Process in batches
     await batchProcess(
       nodes,
@@ -229,16 +247,20 @@ Focus on the main concepts, key relationships, and practical implications.`;
         }
       },
       5, // Batch size
-      verbose ? (processed, total) => {
-        console.log(`Progress: ${processed}/${total} nodes`);
-      } : undefined
+      verbose
+        ? (processed, total) => {
+            console.log(`Progress: ${processed}/${total} nodes`);
+          }
+        : undefined,
     );
-    
-    console.log(`\nComplete! Processed: ${this.processedCount}, Failed: ${this.failedCount}`);
-    
+
+    console.log(
+      `\nComplete! Processed: ${this.processedCount}, Failed: ${this.failedCount}`,
+    );
+
     return {
       processed: this.processedCount,
-      failed: this.failedCount
+      failed: this.failedCount,
     };
   }
 
@@ -254,15 +276,15 @@ Focus on the main concepts, key relationships, and practical implications.`;
  * CLI interface for direct execution
  */
 export async function runCLI(args: string[]): Promise<void> {
-  const nodeId = args.includes('--node-id') 
-    ? parseInt(args[args.indexOf('--node-id') + 1])
+  const nodeId = args.includes("--node-id")
+    ? parseInt(args[args.indexOf("--node-id") + 1])
     : undefined;
-  
-  const forceReEmbed = args.includes('--force');
-  const verbose = args.includes('--verbose');
-  
+
+  const forceReEmbed = args.includes("--force");
+  const verbose = args.includes("--verbose");
+
   const embedder = new NodeEmbedder();
-  
+
   try {
     await embedder.embedNodes({ nodeId, forceReEmbed, verbose });
   } finally {
@@ -272,8 +294,8 @@ export async function runCLI(args: string[]): Promise<void> {
 
 // Run if called directly (for testing)
 if (require.main === module) {
-  runCLI(process.argv.slice(2)).catch(error => {
-    console.error('Error:', error);
+  runCLI(process.argv.slice(2)).catch((error) => {
+    console.error("Error:", error);
     process.exit(1);
   });
 }
