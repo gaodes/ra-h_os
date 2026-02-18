@@ -140,8 +140,9 @@ function mapBookmark(bm) {
   const link = isLink ? content.url : undefined;
 
   const rawText = isLink ? stripHtml(content.htmlContent) : undefined;
-  const chunk =
-    rawText || bm.note ? (rawText || bm.note).slice(0, 2000) : undefined;
+  const rawChunk =
+    rawText || bm.note || (rawSummary ? `${title}: ${rawSummary}` : undefined);
+  const chunk = rawChunk ? rawChunk.slice(0, 2000) : undefined;
 
   const dimensions = Array.isArray(bm.tags)
     ? bm.tags
