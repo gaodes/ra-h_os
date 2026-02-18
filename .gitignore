@@ -84,3 +84,4 @@ apps/mac/src-tauri/target/
 dist/local-app/
 dist/runtime/
 dist/.staging/
+.worktrees/
