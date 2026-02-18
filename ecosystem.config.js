@@ -23,7 +23,7 @@ module.exports = {
       script: "scripts/sync/karakeep-sync.js",
       interpreter: "node",
       cwd: __dirname,
-      cron_restart: "*/15 * * * *",
+      cron_restart: "* * * * *",
       autorestart: false,
     },
   ],
