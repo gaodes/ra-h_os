@@ -16,68 +16,91 @@
  *   RAH_URL           Base URL of your ra-h instance (default: http://localhost:3000)
  */
 
-'use strict';
+"use strict";
 
-const { resolve } = require('path');
-require('dotenv').config({ path: resolve(__dirname, '../../.env.local') });
+const { resolve } = require("path");
+require("dotenv").config({ path: resolve(__dirname, "../../.env.local") });
 
-const fs   = require('fs');
-const os   = require('os');
-const path = require('path');
-const https = require('https');
-const http  = require('http');
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const https = require("https");
+const http = require("http");
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
-const KARAKEEP_URL  = (process.env.KARAKEEP_URL  || '').replace(/\/$/, '');
-const KARAKEEP_KEY  = process.env.KARAKEEP_API_KEY || '';
-const RAH_URL       = (process.env.RAH_URL || 'http://localhost:3000').replace(/\/$/, '');
-const STATE_DIR     = path.join(os.homedir(), '.local', 'share', 'ra-h');
-const STATE_FILE    = path.join(STATE_DIR, 'karakeep-sync.json');
-const PAGE_LIMIT    = 100;
+const KARAKEEP_URL = (process.env.KARAKEEP_URL || "").replace(/\/$/, "");
+const KARAKEEP_KEY = process.env.KARAKEEP_API_KEY || "";
+const RAH_URL = (process.env.RAH_URL || "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
+const STATE_DIR = path.join(os.homedir(), ".local", "share", "ra-h");
+const STATE_FILE = path.join(STATE_DIR, "karakeep-sync.json");
+const PAGE_LIMIT = 100;
 
-const DRY_RUN  = process.argv.includes('--dry-run');
-const BACKFILL = process.argv.includes('--backfill');
+const DRY_RUN = process.argv.includes("--dry-run");
+const BACKFILL = process.argv.includes("--backfill");
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
-if (!KARAKEEP_URL) { console.error('Error: KARAKEEP_URL is not set'); process.exit(1); }
-if (!KARAKEEP_KEY) { console.error('Error: KARAKEEP_API_KEY is not set'); process.exit(1); }
+if (!KARAKEEP_URL) {
+  console.error("Error: KARAKEEP_URL is not set");
+  process.exit(1);
+}
+if (!KARAKEEP_KEY) {
+  console.error("Error: KARAKEEP_API_KEY is not set");
+  process.exit(1);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function request(url, options = {}) {
   return new Promise((resolve, reject) => {
-    const mod  = url.startsWith('https') ? https : http;
+    const mod = url.startsWith("https") ? https : http;
     const body = options.body ? JSON.stringify(options.body) : undefined;
     const headers = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options.headers,
     };
-    if (body) headers['Content-Length'] = Buffer.byteLength(body);
+    if (body) headers["Content-Length"] = Buffer.byteLength(body);
 
-    const req = mod.request(url, { method: options.method || 'GET', headers }, (res) => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        if (res.statusCode >= 400) {
-          reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage}: ${data}`));
-          return;
-        }
-        try { resolve(JSON.parse(data)); }
-        catch { resolve(data); }
-      });
-    });
+    const req = mod.request(
+      url,
+      { method: options.method || "GET", headers },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode >= 400) {
+            reject(
+              new Error(`HTTP ${res.statusCode} ${res.statusMessage}: ${data}`),
+            );
+            return;
+          }
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            resolve(data);
+          }
+        });
+      },
+    );
 
-    req.on('error', reject);
+    req.on("error", reject);
     if (body) req.write(body);
     req.end();
   });
 }
 
 function stripHtml(html) {
-  if (!html) return '';
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!html) return "";
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -85,26 +108,31 @@ function stripHtml(html) {
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
     }
-  } catch { /* first run */ }
+  } catch {
+    /* first run */
+  }
   return { lastSyncTime: null, lastRun: null };
 }
 
 function saveState(state) {
   fs.mkdirSync(STATE_DIR, { recursive: true });
-  fs.writeFileSync(STATE_FILE, JSON.stringify({ ...state, lastRun: new Date().toISOString() }, null, 2));
+  fs.writeFileSync(
+    STATE_FILE,
+    JSON.stringify({ ...state, lastRun: new Date().toISOString() }, null, 2),
+  );
 }
 
 // ── Field mapping ─────────────────────────────────────────────────────────────
 
 function mapBookmark(bm) {
   const content = bm.content || {};
-  const isLink  = content.type === 'link';
+  const isLink = content.type === "link";
 
   const title = bm.title || content.title || content.url || `Bookmark ${bm.id}`;
 
-  const rawSummary = bm.summary || content.description || '';
+  const rawSummary = bm.summary || content.description || "";
   const description = rawSummary.slice(0, 280);
 
   const notes = bm.note || undefined;
@@ -112,24 +140,36 @@ function mapBookmark(bm) {
   const link = isLink ? content.url : undefined;
 
   const rawText = isLink ? stripHtml(content.htmlContent) : undefined;
-  const chunk = (rawText || bm.note) ? (rawText || bm.note).slice(0, 2000) : undefined;
+  const chunk =
+    rawText || bm.note ? (rawText || bm.note).slice(0, 2000) : undefined;
 
-  const dimensions = Array.isArray(bm.tags) ? bm.tags.map(t => t.name).filter(Boolean) : [];
+  const dimensions = Array.isArray(bm.tags)
+    ? bm.tags
+        .map((t) => t.name)
+        .filter(Boolean)
+        .map((n) =>
+          n
+            .toLowerCase()
+            .replace(/[\s\-]+/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_|_$/g, ""),
+        )
+    : [];
 
   const metadata = {
-    source:      'karakeep',
-    karakeepId:  bm.id,
-    createdAt:   bm.createdAt,
-    contentType: content.type || 'unknown',
+    source: "karakeep",
+    karakeepId: bm.id,
+    createdAt: bm.createdAt,
+    contentType: content.type || "unknown",
   };
   if (bm.source) metadata.karakeepSource = bm.source;
 
   const node = { title, metadata };
-  if (description)           node.description = description;
-  if (notes)                 node.notes        = notes;
-  if (link)                  node.link         = link;
-  if (chunk)                 node.chunk        = chunk;
-  if (dimensions.length > 0) node.dimensions   = dimensions;
+  if (description) node.description = description;
+  if (notes) node.notes = notes;
+  if (link) node.link = link;
+  if (chunk) node.chunk = chunk;
+  if (dimensions.length > 0) node.dimensions = dimensions;
 
   return node;
 }
@@ -137,28 +177,35 @@ function mapBookmark(bm) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`[karakeep-sync] Starting${DRY_RUN ? ' (dry-run)' : ''}${BACKFILL ? ' (backfill)' : ''}`);
+  console.log(
+    `[karakeep-sync] Starting${DRY_RUN ? " (dry-run)" : ""}${BACKFILL ? " (backfill)" : ""}`,
+  );
 
-  const state       = loadState();
-  const lastSync    = BACKFILL ? null : state.lastSyncTime;
-  const cutoff      = lastSync ? new Date(lastSync) : null;
+  const state = loadState();
+  const lastSync = BACKFILL ? null : state.lastSyncTime;
+  const cutoff = lastSync ? new Date(lastSync) : null;
 
   if (cutoff) {
-    console.log(`[karakeep-sync] Importing bookmarks newer than ${cutoff.toISOString()}`);
+    console.log(
+      `[karakeep-sync] Importing bookmarks newer than ${cutoff.toISOString()}`,
+    );
   } else {
-    console.log('[karakeep-sync] No cutoff — importing all bookmarks');
+    console.log("[karakeep-sync] No cutoff — importing all bookmarks");
   }
 
   const toImport = [];
-  let cursor     = undefined;
-  let done       = false;
-  let pageCount  = 0;
+  let cursor = undefined;
+  let done = false;
+  let pageCount = 0;
 
   while (!done) {
-    const params = new URLSearchParams({ sortOrder: 'desc', limit: String(PAGE_LIMIT) });
-    if (cursor) params.set('cursor', cursor);
+    const params = new URLSearchParams({
+      sortOrder: "desc",
+      limit: String(PAGE_LIMIT),
+    });
+    if (cursor) params.set("cursor", cursor);
 
-    const url  = `${KARAKEEP_URL}/api/v1/bookmarks?${params}`;
+    const url = `${KARAKEEP_URL}/api/v1/bookmarks?${params}`;
     const data = await request(url, {
       headers: { Authorization: `Bearer ${KARAKEEP_KEY}` },
     });
@@ -169,7 +216,7 @@ async function main() {
     for (const bm of bookmarks) {
       const createdAt = new Date(bm.createdAt);
       if (cutoff && createdAt <= cutoff) {
-        done = true;  // hit items we've already seen — stop
+        done = true; // hit items we've already seen — stop
         break;
       }
       toImport.push(bm);
@@ -181,35 +228,51 @@ async function main() {
     }
   }
 
-  console.log(`[karakeep-sync] Fetched ${pageCount} page(s), found ${toImport.length} new bookmark(s)`);
+  console.log(
+    `[karakeep-sync] Fetched ${pageCount} page(s), found ${toImport.length} new bookmark(s)`,
+  );
 
   if (toImport.length === 0) {
     saveState({ lastSyncTime: state.lastSyncTime });
-    console.log('[karakeep-sync] Nothing to import. Done.');
+    console.log("[karakeep-sync] Nothing to import. Done.");
     return;
   }
 
   let created = 0;
-  let failed  = 0;
+  let failed = 0;
 
   for (const bm of toImport) {
     const node = mapBookmark(bm);
 
     if (DRY_RUN) {
-      console.log('[dry-run]', JSON.stringify(node, null, 2));
+      console.log("[dry-run]", JSON.stringify(node, null, 2));
       created++;
       continue;
     }
 
     try {
-      await request(`${RAH_URL}/api/nodes`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    node,
+      const result = await request(`${RAH_URL}/api/nodes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: node,
       });
       created++;
+
+      // Fire-and-forget: connect new node to similar existing nodes
+      const newNodeId = result?.node?.id;
+      if (newNodeId) {
+        request(`${RAH_URL}/api/nodes/${newNodeId}/integrate`, {
+          method: "POST",
+        }).catch((err) =>
+          console.warn(
+            `[karakeep-sync] integrate ${newNodeId}: ${err.message}`,
+          ),
+        );
+      }
     } catch (err) {
-      console.error(`[karakeep-sync] Failed to create node for ${bm.id}: ${err.message}`);
+      console.error(
+        `[karakeep-sync] Failed to create node for ${bm.id}: ${err.message}`,
+      );
       failed++;
     }
   }
@@ -223,7 +286,7 @@ async function main() {
   console.log(`[karakeep-sync] Done. Created: ${created}, Failed: ${failed}`);
 }
 
-main().catch(err => {
-  console.error('[karakeep-sync] Fatal:', err.message);
+main().catch((err) => {
+  console.error("[karakeep-sync] Fatal:", err.message);
   process.exit(1);
 });
