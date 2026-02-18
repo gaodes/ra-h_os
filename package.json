@@ -6,11 +6,11 @@
   "license": "MIT",
   "author": "Bradley Morris",
   "scripts": {
-    "dev": "NEXT_PUBLIC_DEPLOYMENT_MODE=local NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND=false NODE_OPTIONS=\"--dns-result-order=ipv4first\" next dev",
+    "dev": "NEXT_PUBLIC_DEPLOYMENT_MODE=local NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND=false NODE_OPTIONS=\"--dns-result-order=ipv4first\" concurrently --kill-others --names \"next,mcp\" \"next dev\" \"node apps/mcp-server/server.js\"",
     "clean:local": "bash ./scripts/dev/clean-local-artifacts.sh",
     "audit:repo": "bash ./scripts/dev/audit-repo.sh",
     "build": "NEXT_PUBLIC_DEPLOYMENT_MODE=local NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND=false NODE_OPTIONS=\"--dns-result-order=ipv4first\" next build",
-    "start": "NEXT_PUBLIC_DEPLOYMENT_MODE=local NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND=false NODE_OPTIONS=\"--dns-result-order=ipv4first\" next start",
+    "start": "NEXT_PUBLIC_DEPLOYMENT_MODE=local NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND=false NODE_OPTIONS=\"--dns-result-order=ipv4first\" concurrently --kill-others --names \"next,mcp\" \"next start\" \"node apps/mcp-server/server.js\"",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "setup": "npm install",
