@@ -43,8 +43,12 @@ export class NodeEmbedder {
       throw new Error("OPENAI_API_KEY environment variable is not set");
     }
 
-    this.openaiClient = new OpenAI({ apiKey });
-    this.openaiProvider = createOpenAI({ apiKey });
+    const baseURL = process.env.OPENAI_BASE_URL || undefined;
+    this.openaiClient = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
+    this.openaiProvider = createOpenAI({
+      apiKey,
+      ...(baseURL ? { baseURL } : {}),
+    });
     this.db = createDatabaseConnection();
   }
 

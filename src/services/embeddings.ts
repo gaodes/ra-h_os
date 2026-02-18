@@ -1,11 +1,14 @@
-import OpenAI from 'openai';
+import OpenAI from "openai";
 
 function getOpenAiClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Add OPENAI_API_KEY to your .env.local file.');
+    throw new Error(
+      "OpenAI API key not configured. Add OPENAI_API_KEY to your .env.local file.",
+    );
   }
-  return new OpenAI({ apiKey });
+  const baseURL = process.env.OPENAI_BASE_URL || undefined;
+  return new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
 }
 
 export class EmbeddingService {
@@ -19,17 +22,19 @@ export class EmbeddingService {
       const response = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: query.trim(),
-        encoding_format: "float"
+        encoding_format: "float",
       });
 
       if (!response.data?.[0]?.embedding) {
-        throw new Error('No embedding returned from OpenAI API');
+        throw new Error("No embedding returned from OpenAI API");
       }
 
       return response.data[0].embedding;
     } catch (error) {
-      console.error('Failed to generate query embedding:', error);
-      throw new Error(`Embedding generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to generate query embedding:", error);
+      throw new Error(
+        `Embedding generation failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }
 

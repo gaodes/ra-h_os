@@ -1,3 +1,9 @@
+// Load .env.local with override:true so values here always win over inherited shell env
+require("dotenv").config({
+  path: require("path").resolve(__dirname, ".env.local"),
+  override: true,
+});
+
 module.exports = {
   apps: [
     {
@@ -10,6 +16,7 @@ module.exports = {
         NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BACKEND: "false",
         NODE_OPTIONS: "--dns-result-order=ipv4first",
         NODE_ENV: "production",
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       },
     },
     {
