@@ -1,10 +1,12 @@
-import { embedNodeContent } from '@/services/embedding/ingestion';
-import { nodeService } from '@/services/database';
+import { embedNodeContent } from "@/services/embedding/ingestion";
+import { nodeService } from "@/services/database";
+import { getSQLiteClient } from "@/services/database/sqlite-client";
 
 interface AutoEmbedTask {
   nodeId: number;
   force?: boolean;
   reason?: string;
+  retryCount?: number;
 }
 
 const DEFAULT_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes between automatic runs per node
@@ -16,9 +18,45 @@ export class AutoEmbedQueue {
   private readonly lastRunAt = new Map<number, number>();
   private readonly maxConcurrent = 1;
   private readonly cooldownMs = DEFAULT_COOLDOWN_MS;
-  private readonly embeddingsDisabled = process.env.DISABLE_EMBEDDINGS === 'true';
+  private readonly embeddingsDisabled =
+    process.env.DISABLE_EMBEDDINGS === "true";
 
-  enqueue(nodeId: number, task: Omit<AutoEmbedTask, 'nodeId'> = {}): boolean {
+  constructor() {
+    // Recover nodes that were mid-embedding when the process last stopped.
+    // Delay slightly to let the DB connection initialize before querying.
+    setTimeout(() => this.recoverStuckNodes(), 5000);
+  }
+
+  private async recoverStuckNodes(): Promise<void> {
+    if (this.embeddingsDisabled) return;
+    try {
+      const db = getSQLiteClient();
+      // Reset nodes stuck in 'chunking' — process died before completion.
+      db.prepare(
+        `UPDATE nodes SET chunk_status = 'not_chunked' WHERE chunk_status = 'chunking'`,
+      ).run();
+
+      // Find all nodes with chunk content that haven't been fully embedded.
+      const toRecover = db
+        .prepare(
+          `SELECT id FROM nodes WHERE chunk IS NOT NULL AND chunk != '' AND chunk_status != 'chunked'`,
+        )
+        .all() as { id: number }[];
+
+      if (toRecover.length > 0) {
+        console.log(
+          `[AutoEmbedQueue] Recovering ${toRecover.length} node(s) from previous session`,
+        );
+        for (const { id } of toRecover) {
+          this.enqueue(id, { force: true, reason: "startup_recovery" });
+        }
+      }
+    } catch (error) {
+      console.error("[AutoEmbedQueue] Startup recovery failed:", error);
+    }
+  }
+
+  enqueue(nodeId: number, task: Omit<AutoEmbedTask, "nodeId"> = {}): boolean {
     if (this.embeddingsDisabled && !task.force) {
       return false;
     }
@@ -41,7 +79,7 @@ export class AutoEmbedQueue {
     }
 
     const nextId = this.queue.shift();
-    if (typeof nextId !== 'number') {
+    if (typeof nextId !== "number") {
       return;
     }
 
@@ -64,8 +102,29 @@ export class AutoEmbedQueue {
 
     this.running.add(task.nodeId);
     this.executeTask(task)
-      .catch(error => {
-        console.error('[AutoEmbedQueue] Task failed', task.nodeId, error);
+      .catch((error) => {
+        console.error("[AutoEmbedQueue] Task failed", task.nodeId, error);
+        const retries = task.retryCount ?? 0;
+        if (retries < 3) {
+          const delay = (retries + 1) * 30_000; // 30s, 60s, 90s
+          console.log(
+            `[AutoEmbedQueue] Retrying node ${task.nodeId} in ${delay / 1000}s (attempt ${retries + 1}/3)`,
+          );
+          setTimeout(() => {
+            this.enqueue(task.nodeId, {
+              force: true,
+              reason: "retry",
+              retryCount: retries + 1,
+            });
+          }, delay);
+        } else {
+          console.error(
+            `[AutoEmbedQueue] Node ${task.nodeId} failed after 3 retries, marking as error`,
+          );
+          nodeService
+            .updateNode(task.nodeId, { chunk_status: "error" })
+            .catch(() => {});
+        }
       })
       .finally(() => {
         this.running.delete(task.nodeId);
@@ -82,29 +141,41 @@ export class AutoEmbedQueue {
     }
     const node = await nodeService.getNodeById(task.nodeId);
     if (!node) {
-      console.warn('[AutoEmbedQueue] Node missing, skipping', task.nodeId);
+      console.warn("[AutoEmbedQueue] Node missing, skipping", task.nodeId);
       return;
     }
 
     const chunkText = node.chunk?.trim();
     if (!chunkText) {
-      console.warn('[AutoEmbedQueue] Node has no chunk content, skipping', task.nodeId);
+      console.warn(
+        "[AutoEmbedQueue] Node has no chunk content, skipping",
+        task.nodeId,
+      );
       return;
     }
 
-    if (!task.force && node.chunk_status === 'chunked') {
+    if (!task.force && node.chunk_status === "chunked") {
       return;
     }
 
-    if (node.chunk_status === 'chunking' && !task.force) {
-      console.log('[AutoEmbedQueue] Node already chunking, skipping duplicate run', task.nodeId);
+    if (node.chunk_status === "chunking" && !task.force) {
+      console.log(
+        "[AutoEmbedQueue] Node already chunking, skipping duplicate run",
+        task.nodeId,
+      );
       return;
     }
 
-    console.log(`🔄 [AutoEmbedQueue] Embedding node ${task.nodeId}${task.reason ? ` (${task.reason})` : ''}`);
+    console.log(
+      `🔄 [AutoEmbedQueue] Embedding node ${task.nodeId}${task.reason ? ` (${task.reason})` : ""}`,
+    );
     const result = await embedNodeContent(task.nodeId);
     if (!result.success) {
-      console.error('[AutoEmbedQueue] Embedding failed', task.nodeId, result.error);
+      console.error(
+        "[AutoEmbedQueue] Embedding failed",
+        task.nodeId,
+        result.error,
+      );
     }
   }
 }

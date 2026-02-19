@@ -82,31 +82,22 @@ export class UniversalEmbedder {
   }
 
   /**
-   * Delete existing chunks for a node
+   * Delete existing chunks for a node.
+   * Wrapped in a transaction so partial deletes can't leave orphaned vec entries.
    */
   private deleteExistingChunks(nodeId: number): void {
-    // First, get all chunk IDs for this node
     const chunkIds = this.db
       .prepare("SELECT id FROM chunks WHERE node_id = ?")
       .all(nodeId) as Array<{ id: number }>;
 
-    // Delete from vec_chunks first, one by one to ensure they're removed
-    for (const chunk of chunkIds) {
-      try {
-        const deleteVecStmt = this.db.prepare(
-          "DELETE FROM vec_chunks WHERE chunk_id = ?",
-        );
-        deleteVecStmt.run(BigInt(chunk.id));
-      } catch (error) {
-        console.warn(`Could not delete vec_chunk ${chunk.id}:`, error);
+    this.db.transaction(() => {
+      for (const chunk of chunkIds) {
+        this.db
+          .prepare("DELETE FROM vec_chunks WHERE chunk_id = ?")
+          .run(BigInt(chunk.id));
       }
-    }
-
-    // Then delete from chunks table
-    const deleteChunksStmt = this.db.prepare(
-      "DELETE FROM chunks WHERE node_id = ?",
-    );
-    deleteChunksStmt.run(nodeId);
+      this.db.prepare("DELETE FROM chunks WHERE node_id = ?").run(nodeId);
+    })();
   }
 
   /**
@@ -139,25 +130,25 @@ export class UniversalEmbedder {
 
     const chunkId = Number(result.lastInsertRowid);
 
-    // Insert into vec_chunks virtual table (use bracketed string format)
+    // Insert into vec_chunks. On failure, remove the orphaned chunks row and
+    // throw so the pipeline can retry rather than silently producing desync.
     try {
       const vectorString = `[${embedding.join(",")}]`;
-      // First try to delete any existing vec_chunk with this ID
       try {
-        const deleteStmt = this.db.prepare(
-          "DELETE FROM vec_chunks WHERE chunk_id = ?",
-        );
-        deleteStmt.run(BigInt(chunkId));
+        this.db
+          .prepare("DELETE FROM vec_chunks WHERE chunk_id = ?")
+          .run(BigInt(chunkId));
       } catch {}
-
-      // Now insert the new embedding
-      const sql = "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)";
-      const vecInsertStmt = this.db.prepare(sql);
-      vecInsertStmt.run(BigInt(chunkId), vectorString);
+      this.db
+        .prepare("INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)")
+        .run(BigInt(chunkId), vectorString);
     } catch (error) {
-      console.warn(
-        `Could not insert into vec_chunks for chunk ${chunkId}:`,
-        error,
+      // Clean up the orphaned chunks row so the DB stays consistent.
+      try {
+        this.db.prepare("DELETE FROM chunks WHERE id = ?").run(chunkId);
+      } catch {}
+      throw new Error(
+        `vec_chunks insert failed for chunk ${chunkId}: ${error}`,
       );
     }
   }
