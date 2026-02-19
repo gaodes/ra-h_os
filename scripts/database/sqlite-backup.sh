@@ -26,7 +26,7 @@ fi
 
 echo "Resolved DB path: $DB_PATH"
 
-BACKUP_DIR="$(dirname "$0")/../backups"
+BACKUP_DIR="${BACKUP_DIR:-$(dirname "$0")/../backups}"
 mkdir -p "$BACKUP_DIR"
 
 TS=$(date +"%Y%m%d_%H%M%S")

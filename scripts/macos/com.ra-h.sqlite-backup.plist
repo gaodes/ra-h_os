@@ -9,11 +9,17 @@
     <array>
       <string>/bin/bash</string>
       <string>-lc</string>
-      <string>cd /Users/bradleymorris/Desktop/dev/ra-h && bash scripts/database/sqlite-backup.sh</string>
+      <string>cd /Users/elche/Code/Dev/ra-h_os && bash scripts/database/sqlite-backup.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/bradleymorris/Desktop/dev/ra-h</string>
+    <string>/Users/elche/Code/Dev/ra-h_os</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>BACKUP_DIR</key>
+      <string>/Users/elche/Library/Mobile Documents/com~apple~CloudDocs/Backups/ra-h_os</string>
+    </dict>
 
     <key>StartCalendarInterval</key>
     <dict>
@@ -27,9 +33,8 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/bradleymorris/Library/Logs/ra-h-sqlite-backup.log</string>
+    <string>/Users/elche/Library/Logs/ra-h-sqlite-backup.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/bradleymorris/Library/Logs/ra-h-sqlite-backup.log</string>
+    <string>/Users/elche/Library/Logs/ra-h-sqlite-backup.log</string>
   </dict>
 </plist>
-
